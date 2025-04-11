@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
+from .chat_message import MessageSender
 
 class ChatHistory:
     """Handles chat history serialization and deserialization."""
@@ -18,12 +19,12 @@ class ChatHistory:
         self.current_chat: List[Dict[str, Any]] = []
         self.pending_messages: Dict[str, Dict[str, Any]] = {}  # Track incomplete messages
     
-    def add_message(self, text: str, is_user: bool, message_id: str) -> None:
+    def add_message(self, text: str, sender: MessageSender, message_id: str) -> None:
         """Add a message to the current chat history.
         
         Args:
             text: The message text
-            is_user: Whether the message is from the user
+            sender: The type of sender (user, assistant, system, etc.)
             message_id: Unique identifier for the message
         """
         # Skip empty messages
@@ -31,17 +32,17 @@ class ChatHistory:
             return
             
         # For user messages, save immediately
-        if is_user:
+        if sender == MessageSender.USER:
             self.current_chat.append({
                 "text": text,
-                "is_user": is_user,
+                "sender": sender.value,
                 "timestamp": datetime.now().isoformat()
             })
         else:
-            # For assistant messages, update the pending message
+            # For other messages, only update the pending message
             self.pending_messages[message_id] = {
                 "text": text,
-                "is_user": is_user,
+                "sender": sender.value,
                 "timestamp": datetime.now().isoformat()
             }
     

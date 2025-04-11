@@ -31,7 +31,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .processor import AudioProcessor
-from .chat_message import ChatMessage
+from .chat_message import ChatMessage, MessageSender
 from .chat_history import ChatHistory
 
 class AudioAssistant(QMainWindow):
@@ -335,17 +335,19 @@ class AudioAssistant(QMainWindow):
         if message_id not in self.current_messages:
             # Create new message if it doesn't exist
             is_user = message_id.endswith("_user")
-            message = ChatMessage(text, is_user)
+            sender = MessageSender.USER if is_user else MessageSender.ASSISTANT
+            message = ChatMessage(text, sender)
             self.chat_layout.addWidget(message)
             self.current_messages[message_id] = message
             
             # Add to chat history
-            self.chat_history.add_message(text, is_user, message_id)
+            self.chat_history.add_message(text, sender, message_id)
         else:
             # Update existing message
             self.current_messages[message_id].update_text(text)
             # Update chat history
-            self.chat_history.add_message(text, message_id.endswith("_user"), message_id)
+            sender = MessageSender.USER if message_id.endswith("_user") else MessageSender.ASSISTANT
+            self.chat_history.add_message(text, sender, message_id)
         
         # Scroll to bottom
         scroll_area = self.chat_container.parent().parent()
@@ -367,6 +369,8 @@ class AudioAssistant(QMainWindow):
             # Get the final text from the current message
             final_text = self.current_messages[assistant_id].text_edit.toPlainText()
             if final_text.strip():
+                # Add the final message to chat history
+                self.chat_history.add_message(final_text, MessageSender.ASSISTANT, assistant_id)
                 self.chat_history.complete_message(assistant_id)
         
         # Reset UI state
