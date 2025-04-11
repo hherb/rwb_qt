@@ -25,7 +25,7 @@ class ChatHistory:
         """Add a message to the current chat history.
         
         Args:
-            text: The message text
+            text: The message text (original markdown for assistant messages)
             sender: The type of sender (user, assistant, system, etc.)
             message_id: Unique identifier for the message
         """
@@ -38,14 +38,16 @@ class ChatHistory:
             self.current_chat.append({
                 "text": text,
                 "sender": sender.value,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "format": "markdown"  # Indicate this is markdown format
             })
         else:
             # For other messages, only update the pending message
             self.pending_messages[message_id] = {
                 "text": text,
                 "sender": sender.value,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "format": "markdown"  # Indicate this is markdown format
             }
     
     def complete_message(self, message_id: str) -> None:

@@ -207,13 +207,16 @@ class AudioAssistant(QMainWindow):
             assistant_id = f"{id(self)}_assistant"
             
         if assistant_id in self.current_messages:
-            # Get the final text from the current message widget
-            final_text = self.current_messages[assistant_id].text_edit.toPlainText()
+            # Use the assistant_text directly from the processor response,
+            # which is the original markdown, rather than extracting from the UI widget
+            # which would give us the HTML rendered version
+            
+            final_text = assistant_text if assistant_text.strip() else ""
             
             # Only process if there's actual text
             if final_text.strip():
                 print(f"Adding assistant message to history: {final_text[:30]}...")
-                # Only now add the complete assistant message to chat history
+                # Add the original markdown text to chat history
                 self.chat_history.add_message(final_text, MessageSender.ASSISTANT, assistant_id)
                 self.chat_history.complete_message(assistant_id)
                 self.chat_history.save()
