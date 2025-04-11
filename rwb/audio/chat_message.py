@@ -98,7 +98,7 @@ class ChatMessage(QFrame):
             pre {
                 background-color: #2d2d2d;
                 padding: 10px;
-                border-radius: 5px;
+                border-radius: 15px;
                 margin: 10px 0;
             }
             blockquote {

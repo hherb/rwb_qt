@@ -18,6 +18,8 @@ class ChatHistory:
         self.history_dir.mkdir(parents=True, exist_ok=True)
         self.current_chat: List[Dict[str, Any]] = []
         self.pending_messages: Dict[str, Dict[str, Any]] = {}  # Track incomplete messages
+        # Create a persistent filename for the current session
+        self.current_session_filename = self.history_dir / f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     
     def add_message(self, text: str, sender: MessageSender, message_id: str) -> None:
         """Add a message to the current chat history.
@@ -61,14 +63,11 @@ class ChatHistory:
         """Save the current chat history to a file."""
         if not self.current_chat:
             return
-            
-        # Use current time for filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = self.history_dir / f"chat_{timestamp}.json"
         
-        with open(filename, 'w') as f:
+        # Use the persistent filename for this session
+        with open(self.current_session_filename, 'w') as f:
             json.dump(self.current_chat, f, indent=2)
         
-        # Clear current chat after saving
-        self.current_chat = []
-        self.pending_messages = {} 
+        # Don't clear current chat after saving so we keep the entire session
+        # self.current_chat = []
+        # self.pending_messages = {} 
