@@ -5,7 +5,7 @@ handling user interaction, audio recording, and displaying the conversation.
 """
 
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
@@ -35,6 +35,7 @@ from .ui.styles import (
     BUTTON_STYLE_NORMAL,
     BUTTON_STYLE_RECORDING
 )
+from .ui.history_list import HistoryList
 
 class AudioAssistant(QMainWindow):
     """Main window for the voice assistant application."""
@@ -43,7 +44,7 @@ class AudioAssistant(QMainWindow):
         """Initialize the AudioAssistant."""
         super().__init__()
         self.setWindowTitle("Voice Assistant")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1000, 700)
         
         # Initialize chat history
         self.chat_history = ChatHistory()
@@ -64,31 +65,79 @@ class AudioAssistant(QMainWindow):
         self.current_messages: Dict[str, ChatMessage] = {}
         self.current_message_id: str = ""  # Current session message ID
         
-        # Create UI
-        self.setup_ui()
+        # Create the tabbed interface
+        self.setup_tabbed_ui()
     
-    def setup_ui(self) -> None:
-        """Set up the user interface."""
-        # Create central widget
+    def setup_tabbed_ui(self) -> None:
+        """Set up the tabbed user interface."""
+        # Create central widget and tab container
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # Create main layout
+        # Main layout for the central widget
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setTabPosition(QTabWidget.North)
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #444;
+                background: #222;
+                border-radius: 5px;
+            }
+            QTabBar::tab {
+                background: #333;
+                color: white;
+                padding: 10px 20px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background: #444;
+                border-bottom: 2px solid #4CAF50;
+            }
+            QTabBar::tab:hover {
+                background: #3a3a3a;
+            }
+        """)
+        
+        # Create main chat tab
+        self.chat_tab = QWidget()
+        self.setup_chat_ui()
+        self.tab_widget.addTab(self.chat_tab, "Chat")
+        
+        # Create history tab
+        self.history_tab = QWidget()
+        self.setup_history_ui()
+        self.tab_widget.addTab(self.history_tab, "History")
+        
+        # Connect tab changes
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+        
+        # Add tabs to main layout
+        main_layout.addWidget(self.tab_widget)
+    
+    def setup_chat_ui(self) -> None:
+        """Set up the chat user interface."""
+        # Create main layout for chat tab
+        chat_layout = QVBoxLayout(self.chat_tab)
+        chat_layout.setContentsMargins(20, 20, 20, 20)
+        chat_layout.setSpacing(20)
         
         # Create status label
         self.status_label = create_status_label()
-        main_layout.addWidget(self.status_label)
+        chat_layout.addWidget(self.status_label)
         
         # Create chat scroll area
         scroll_area, self.chat_container, self.chat_layout = create_chat_scroll_area()
-        main_layout.addWidget(scroll_area, stretch=1)
+        chat_layout.addWidget(scroll_area, stretch=1)
         
         # Create button container
         button_container = QWidget()
-        main_layout.addWidget(button_container)
+        chat_layout.addWidget(button_container)
         
         # Create button layout
         button_layout = create_button_layout(button_container)
@@ -106,12 +155,137 @@ class AudioAssistant(QMainWindow):
         # Create text input
         self.text_input = create_text_input()
         self.text_input.returnPressed.connect(self.send_text)
-        main_layout.addWidget(self.text_input)
+        chat_layout.addWidget(self.text_input)
         
         # Create send button
         self.send_button = create_send_button()
         self.send_button.clicked.connect(self.send_text)
-        main_layout.addWidget(self.send_button)
+        chat_layout.addWidget(self.send_button)
+    
+    def setup_history_ui(self) -> None:
+        """Set up the history tab user interface."""
+        # Create main layout for history tab
+        history_layout = QVBoxLayout(self.history_tab)
+        history_layout.setContentsMargins(20, 20, 20, 20)
+        history_layout.setSpacing(20)
+        
+        # Create status label for history tab
+        self.history_status_label = create_status_label()
+        self.history_status_label.setText("Select a chat history to view")
+        history_layout.addWidget(self.history_status_label)
+        
+        # Create splitter for horizontal layout
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setChildrenCollapsible(False)  # Prevent collapsing sections completely
+        splitter.setStyleSheet("""
+            QSplitter::handle {
+                background-color: #444;
+                width: 2px;
+                margin: 2px;
+            }
+            QSplitter::handle:hover {
+                background-color: #4CAF50;
+            }
+        """)
+        
+        # Create history list widget (left side)
+        self.history_list = HistoryList()
+        self.history_list.history_selected.connect(self.on_history_selected)
+        self.history_list.history_deleted.connect(self.on_history_deleted)
+        
+        # Create right side widget for chat display
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(10, 0, 0, 0)
+        
+        # Create chat display scroll area (right side)
+        self.history_scroll, self.history_container, self.history_chat_layout = create_chat_scroll_area()
+        right_layout.addWidget(self.history_scroll)
+        
+        # Add widgets to splitter
+        splitter.addWidget(self.history_list)
+        splitter.addWidget(right_widget)
+        
+        # Set initial sizes (40% for list, 60% for chat display)
+        splitter.setSizes([400, 600])
+        
+        # Add splitter to main layout
+        history_layout.addWidget(splitter, 1)
+    
+    def on_tab_changed(self, index: int) -> None:
+        """Handle tab change events.
+        
+        Args:
+            index: The index of the selected tab
+        """
+        if index == 1:  # History tab
+            # Refresh history list when switching to this tab
+            self.history_list._load_histories()
+    
+    def on_history_deleted(self, file_path: str) -> None:
+        """Handle history deletion.
+        
+        Args:
+            file_path: Path to the deleted history file
+        """
+        # Clear the chat layout if the currently viewed history was deleted
+        self.clear_history_view()
+        self.history_status_label.setText("History deleted. Select another chat history to view.")
+    
+    def clear_history_view(self) -> None:
+        """Clear the history view."""
+        while self.history_chat_layout.count():
+            item = self.history_chat_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+    
+    def on_history_selected(self, file_path: str) -> None:
+        """Handle history selection.
+        
+        Args:
+            file_path: Path to the selected history file
+        """
+        import json
+        from pathlib import Path
+        
+        # Clear the chat layout
+        self.clear_history_view()
+        
+        # Update status label
+        path = Path(file_path)
+        self.history_status_label.setText(f"Viewing: {path.name}")
+        
+        # Try to load and display the file contents
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+            
+            # Display the conversation using ChatMessage widgets
+            for message in data:
+                sender_str = message.get('sender', 'unknown')
+                text = message.get('text', '')
+                
+                # Convert sender string to MessageSender enum
+                if sender_str == 'user':
+                    sender = MessageSender.USER
+                elif sender_str == 'assistant':
+                    sender = MessageSender.ASSISTANT
+                elif sender_str == 'system':
+                    sender = MessageSender.SYSTEM
+                else:
+                    sender = MessageSender.OTHER
+                
+                # Create and add chat message widget
+                chat_message = ChatMessage(text, sender)
+                self.history_chat_layout.addWidget(chat_message)
+            
+            # Scroll to top
+            self.history_scroll.verticalScrollBar().setValue(0)
+                
+        except Exception as e:
+            # Show error message
+            self.history_status_label.setText(f"Error loading file: {str(e)}")
     
     def start_recording(self) -> None:
         """Start recording audio."""
