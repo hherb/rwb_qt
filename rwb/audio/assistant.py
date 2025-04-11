@@ -25,81 +25,14 @@ from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot, QSize
 from PySide6.QtGui import QFont, QTextCursor, QIcon
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
+import os
+import json
+from datetime import datetime
+from pathlib import Path
 
 from .processor import AudioProcessor
-
-class ChatMessage(QFrame):
-    """A chat message widget with an icon and text."""
-    
-    def __init__(self, text: str, is_user: bool, parent: QWidget = None):
-        super().__init__(parent)
-        self.setObjectName("chatMessage")
-        self.setStyleSheet(f"""
-            QFrame#chatMessage {{
-                background-color: {'#2d2d2d' if is_user else '#3d3d3d'};
-                border-radius: 30px;
-                padding: 10px;
-                margin: 5px;
-                margin-{'right' if is_user else 'left'}: 30px;
-            }}
-        """)
-        
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
-        
-        # Add icon
-        icon_label = QLabel()
-        icon_label.setFixedSize(40, 40)
-        icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("font-size: 24px;")
-        icon_label.setText("👤" if is_user else "🤖")
-        layout.addWidget(icon_label)
-        
-        # Add text
-        self.text_edit = QTextEdit()
-        self.text_edit.setReadOnly(True)
-        self.text_edit.setPlainText(text)
-        self.text_edit.setStyleSheet("""
-            QTextEdit {
-                background-color: transparent;
-                border: none;
-                font-size: 14px;
-                color: #ffffff;
-            }
-        """)
-        self.text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        layout.addWidget(self.text_edit)
-        
-        # Calculate initial size
-        self.update_text(text)
-        
-    def update_text(self, text: str) -> None:
-        """Update the message text and adjust height."""
-        self.text_edit.setPlainText(text)
-        
-        # Force document update
-        self.text_edit.document().adjustSize()
-        
-        # Get the document size
-        doc = self.text_edit.document()
-        doc_height = doc.size().height()
-        
-        # Calculate margins and padding
-        margins = self.text_edit.contentsMargins()
-        padding = 10  # Additional padding
-        
-        # Set the text edit height
-        text_height = doc_height + margins.top() + margins.bottom() + padding
-        self.text_edit.setFixedHeight(text_height)
-        
-        # Update the frame's minimum height
-        frame_margins = self.contentsMargins()
-        frame_height = text_height + frame_margins.top() + frame_margins.bottom()
-        self.setMinimumHeight(frame_height)
-        self.setMaximumHeight(frame_height)
+from .chat_message import ChatMessage
+from .chat_history import ChatHistory
 
 class AudioAssistant(QMainWindow):
     """Main window for the voice assistant application.
@@ -127,6 +60,9 @@ class AudioAssistant(QMainWindow):
         super().__init__()
         self.setWindowTitle("Voice Assistant")
         self.setGeometry(100, 100, 800, 600)
+        
+        # Initialize chat history
+        self.chat_history = ChatHistory()
         
         # Audio parameters
         self.CHUNK = 1024
@@ -402,9 +338,14 @@ class AudioAssistant(QMainWindow):
             message = ChatMessage(text, is_user)
             self.chat_layout.addWidget(message)
             self.current_messages[message_id] = message
+            
+            # Add to chat history
+            self.chat_history.add_message(text, is_user, message_id)
         else:
             # Update existing message
             self.current_messages[message_id].update_text(text)
+            # Update chat history
+            self.chat_history.add_message(text, message_id.endswith("_user"), message_id)
         
         # Scroll to bottom
         scroll_area = self.chat_container.parent().parent()
@@ -420,9 +361,35 @@ class AudioAssistant(QMainWindow):
             user_text: The transcribed user input
             assistant_text: The generated assistant response
         """
-        # Clear current messages as they've been finalized
-        self.current_messages.clear()
-        # No need to add messages again as they're already added through text_update
+        # Mark assistant message as complete
+        assistant_id = f"{id(self)}_assistant"
+        if assistant_id in self.current_messages:
+            # Get the final text from the current message
+            final_text = self.current_messages[assistant_id].text_edit.toPlainText()
+            if final_text.strip():
+                self.chat_history.complete_message(assistant_id)
+        
+        # Reset UI state
+        self.status_label.setText("Ready to talk")
+        self.talk_button.setText("Hold to Talk")
+        self.talk_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                font-size: 16px;
+                border-radius: 10px;
+            }
+            QPushButton:pressed {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #2d2d2d;
+            }
+        """)
+        self.talk_button.setEnabled(True)
+        self.stop_button.setVisible(False)  # Hide stop button when processing ends
     
     @Slot(str)
     def handle_processing_error(self, error_message: str) -> None:
@@ -564,5 +531,9 @@ class AudioAssistant(QMainWindow):
         if self.processor and self.processor.isRunning():
             self.processor.terminate()
             self.processor.wait()
+        
+        # Save chat history before closing
+        self.chat_history.save()
+        
         self.audio.terminate()
         event.accept() 
