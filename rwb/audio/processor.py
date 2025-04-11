@@ -89,31 +89,27 @@ class AudioProcessor(QThread):
             if self.direct_text is not None:
                 user_text = self.direct_text
             else:
-                user_text = self.stt_model.stt((self.sample_rate, self.audio_data))
+                # Convert audio data to the format expected by the STT model
+                if isinstance(self.audio_data, np.ndarray):
+                    # If it's already a numpy array, ensure it's in the right shape
+                    if len(self.audio_data.shape) == 1:
+                        audio_data = self.audio_data.reshape(1, -1)
+                    else:
+                        audio_data = self.audio_data
+                else:
+                    # Convert bytes to numpy array
+                    audio_data = np.frombuffer(self.audio_data, dtype=np.float32)
+                    audio_data = audio_data.reshape(1, -1)
+                
+                # Convert to text
+                user_text = self.stt_model.stt((self.sample_rate, audio_data))
             
             # Emit user text update
             self.text_update.emit(f"{self.current_message_id}_user", user_text)
             
-            # Get LLM response
-            response = chat(model='granite3.2:8b-instruct-q8_0', messages=[
-                {
-                    'role': 'user',
-                    'content': user_text,
-                },
-            ])
-            
-            assistant_text = response['message']['content']
-            
-            # Emit assistant text update
-            self.text_update.emit(f"{self.current_message_id}_assistant", assistant_text)
-            
-            # Emit the final results
-            self.finished.emit(user_text, assistant_text)
-            
-            # Start speaking
-            self.speaking.emit()
-            
-            # Text to speech and play audio
+            # Get LLM response with streaming
+            assistant_text = ""
+            current_sentence = ""
             output_stream = self.audio.open(
                 format=pyaudio.paFloat32,
                 channels=1,
@@ -123,29 +119,63 @@ class AudioProcessor(QThread):
             )
             
             try:
-                # Get the TTS stream
-                tts_stream = self.tts_model.stream_tts_sync(assistant_text, options=self.tts_options)
+                for response in chat(model='granite3.2:8b-instruct-q8_0', messages=[
+                    {
+                        'role': 'user',
+                        'content': user_text,
+                    },
+                ], stream=True):
+                    if 'message' in response and 'content' in response['message']:
+                        chunk = response['message']['content']
+                        assistant_text += chunk
+                        current_sentence += chunk
+                        
+                        # Emit streaming text update
+                        self.text_update.emit(f"{self.current_message_id}_assistant", assistant_text)
+                        
+                        # Check if we have a complete sentence
+                        # Look for sentence boundaries that are followed by a space or end of text
+                        sentence_end = False
+                        for end in ('.', '!', '?'):
+                            if end in current_sentence:
+                                # Check if the end is followed by a space or is at the end of the text
+                                pos = current_sentence.rfind(end)
+                                if pos == len(current_sentence) - 1 or current_sentence[pos + 1] == ' ':
+                                    sentence_end = True
+                                    break
+                        
+                        # Also consider the end of the response as a sentence boundary
+                        if sentence_end or (response['done'] and current_sentence.strip()):
+                            # Process the current sentence for TTS
+                            if current_sentence.strip():  # Only process if we have actual content
+                                tts_stream = self.tts_model.stream_tts_sync(current_sentence.strip(), options=self.tts_options)
+                                
+                                # Process each chunk of TTS audio
+                                for tts_chunk in tts_stream:
+                                    if isinstance(tts_chunk, tuple):
+                                        if len(tts_chunk) > 0:
+                                            sample_rate, audio_data = tts_chunk
+                                            if isinstance(audio_data, np.ndarray):
+                                                # Resample from Kokoro's rate to PyAudio's rate
+                                                audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=44100)
+                                                audio_bytes = audio_data.tobytes()
+                                                output_stream.write(audio_bytes)
+                                    else:
+                                        if isinstance(tts_chunk, np.ndarray):
+                                            audio_data = librosa.resample(tts_chunk, orig_sr=24000, target_sr=44100)
+                                            audio_bytes = audio_data.tobytes()
+                                            output_stream.write(audio_bytes)
+                                        elif isinstance(tts_chunk, bytes):
+                                            audio_array = np.frombuffer(tts_chunk, dtype=np.float32)
+                                            audio_array = librosa.resample(audio_array, orig_sr=24000, target_sr=44100)
+                                            audio_bytes = audio_array.tobytes()
+                                            output_stream.write(audio_bytes)
+                                
+                                # Reset current sentence
+                                current_sentence = ""
                 
-                # Process each chunk
-                for chunk in tts_stream:
-                    if isinstance(chunk, tuple):
-                        if len(chunk) > 0:
-                            sample_rate, audio_data = chunk
-                            if isinstance(audio_data, np.ndarray):
-                                # Resample from Kokoro's rate to PyAudio's rate
-                                audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=44100)
-                                audio_bytes = audio_data.tobytes()
-                                output_stream.write(audio_bytes)
-                    else:
-                        if isinstance(chunk, np.ndarray):
-                            audio_data = librosa.resample(chunk, orig_sr=24000, target_sr=44100)
-                            audio_bytes = audio_data.tobytes()
-                            output_stream.write(audio_bytes)
-                        elif isinstance(chunk, bytes):
-                            audio_array = np.frombuffer(chunk, dtype=np.float32)
-                            audio_array = librosa.resample(audio_array, orig_sr=24000, target_sr=44100)
-                            audio_bytes = audio_array.tobytes()
-                            output_stream.write(audio_bytes)
+                # Emit the final results
+                self.finished.emit(user_text, assistant_text)
                 
             finally:
                 output_stream.stop_stream()

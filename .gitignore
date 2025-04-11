@@ -11,3 +11,6 @@ wheels/
 
 #secrets
 .env
+.DS_Store
+.DS_Store
+rwb/audio/.DS_Store

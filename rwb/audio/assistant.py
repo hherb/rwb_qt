@@ -18,10 +18,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QScrollArea,
     QFrame,
-    QSizePolicy
+    QSizePolicy,
+    QLineEdit
 )
-from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtCore import Qt, QTimer, QThread, Signal, Slot, QSize
+from PySide6.QtGui import QFont, QTextCursor, QIcon
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
 
@@ -36,7 +37,7 @@ class ChatMessage(QFrame):
         self.setStyleSheet(f"""
             QFrame#chatMessage {{
                 background-color: {'#2d2d2d' if is_user else '#3d3d3d'};
-                border-radius: 15px;
+                border-radius: 30px;
                 padding: 10px;
                 margin: 5px;
                 margin-{'right' if is_user else 'left'}: 30px;
@@ -154,20 +155,26 @@ class AudioAssistant(QMainWindow):
         self.setup_ui()
         
     def setup_ui(self) -> None:
-        """Setup the user interface.
-        
-        Creates and arranges all UI elements including:
-        - Scroll area for chat messages
-        - Status label
-        - Conversation display
-        - Talk button
-        - Stop button
-        """
+        """Set up the user interface."""
+        # Create central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
+        
+        # Create main layout
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(20)
+        
+        # Create status label
+        self.status_label = QLabel("Ready to talk")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setStyleSheet("""
+            QLabel {
+                color: #cccccc;
+                font-size: 14px;
+            }
+        """)
+        main_layout.addWidget(self.status_label)
         
         # Create scroll area for chat messages
         scroll_area = QScrollArea()
@@ -202,67 +209,12 @@ class AudioAssistant(QMainWindow):
         scroll_area.setWidget(self.chat_container)
         main_layout.addWidget(scroll_area, stretch=1)
         
-        # Status label
-        self.status_label = QLabel("Ready to talk")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("""
-            QLabel {
-                color: #cccccc;
-                font-size: 14px;
-            }
-        """)
-        main_layout.addWidget(self.status_label)
+        # Create button layout
+        button_layout = QHBoxLayout()
+        main_layout.addLayout(button_layout)
         
-        # Input container (fixed height)
-        input_container = QWidget()
-        input_container.setFixedHeight(120)  # Reduced height
-        input_layout = QVBoxLayout(input_container)
-        input_layout.setContentsMargins(0, 0, 0, 0)
-        input_layout.setSpacing(10)
-        
-        # Text input box
-        self.text_input = QTextEdit()
-        self.text_input.setPlaceholderText("Type your message here...")
-        self.text_input.setFixedHeight(60)  # Reduced height
-        self.text_input.setStyleSheet("""
-            QTextEdit {
-                border: 2px solid #4CAF50;
-                border-radius: 10px;
-                padding: 5px;
-                font-size: 14px;
-                background-color: #2d2d2d;
-                color: #ffffff;
-            }
-            QTextEdit:focus {
-                border: 2px solid #66bb6a;
-            }
-        """)
-        self.text_input.keyPressEvent = self.handle_text_input_keypress
-        input_layout.addWidget(self.text_input)
-        
-        # Button container
-        button_container = QWidget()
-        button_layout = QHBoxLayout(button_container)
-        button_layout.setSpacing(10)
-        
-        # Create a temporary button to measure text height
-        temp_button = QPushButton("Hold to Talk")
-        temp_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 15px 30px;
-                font-size: 16px;
-                border-radius: 10px;
-            }
-        """)
-        temp_button.adjustSize()
-        button_height = temp_button.sizeHint().height()
-        
-        # Talk button
+        # Create buttons
         self.talk_button = QPushButton("Hold to Talk")
-        self.talk_button.setFixedHeight(button_height)
         self.talk_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -283,31 +235,39 @@ class AudioAssistant(QMainWindow):
         self.talk_button.released.connect(self.stop_recording)
         button_layout.addWidget(self.talk_button)
         
-        # Stop button
-        self.stop_button = QPushButton("Stop")
-        self.stop_button.setFixedHeight(button_height)
+        self.stop_button = QPushButton()
+        self.stop_button.setIcon(QIcon("icons/stop2.png"))
+        self.stop_button.setIconSize(QSize(32, 32))
+        self.stop_button.setFixedSize(40, 40)  # Slightly larger than icon for better visibility
+        self.stop_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.stop_button.setStyleSheet("""
             QPushButton {
                 background-color: #f44336;
-                color: white;
                 border: none;
-                padding: 15px 30px;
-                font-size: 16px;
-                border-radius: 10px;
+                border-radius: 20px;
+                padding: 4px;
             }
             QPushButton:pressed {
                 background-color: #d32f2f;
             }
-            QPushButton:disabled {
-                background-color: #2d2d2d;
+            QPushButton:hover {
+                background-color: #e53935;
             }
         """)
         self.stop_button.clicked.connect(self.stop_processing)
-        self.stop_button.setEnabled(False)
+        self.stop_button.setVisible(False)  # Initially hidden
         button_layout.addWidget(self.stop_button)
         
-        input_layout.addWidget(button_container)
-        main_layout.addWidget(input_container)
+        # Create text input
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText("Type your message here...")
+        self.text_input.returnPressed.connect(self.send_text)
+        main_layout.addWidget(self.text_input)
+        
+        # Create send button
+        self.send_button = QPushButton("Send")
+        self.send_button.clicked.connect(self.send_text)
+        main_layout.addWidget(self.send_button)
     
     def add_message(self, text: str, is_user: bool):
         """Add a new message to the chat."""
@@ -330,7 +290,7 @@ class AudioAssistant(QMainWindow):
             self.processor = None
             self.status_label.setText("Processing stopped")
             self.talk_button.setEnabled(True)
-            self.stop_button.setEnabled(False)
+            self.stop_button.setVisible(False)
             self.talk_button.setText("Hold to Talk")
             self.talk_button.setStyleSheet("""
                 QPushButton {
@@ -350,10 +310,7 @@ class AudioAssistant(QMainWindow):
             """)
     
     def start_recording(self) -> None:
-        """Start recording audio.
-        
-        Initializes the audio input stream and starts recording audio chunks.
-        """
+        """Start recording audio."""
         if not self.recording:
             self.recording = True
             self.frames = []
@@ -383,13 +340,10 @@ class AudioAssistant(QMainWindow):
             # Start recording timer
             self.record_timer = QTimer()
             self.record_timer.timeout.connect(self.record_audio)
-            self.record_timer.start(10)
+            self.record_timer.start(10)  # Check every 10ms
     
     def record_audio(self) -> None:
-        """Record a chunk of audio.
-        
-        Called by the recording timer to capture audio data.
-        """
+        """Record a chunk of audio."""
         if self.recording:
             try:
                 data = self.input_stream.read(self.CHUNK)
@@ -398,10 +352,7 @@ class AudioAssistant(QMainWindow):
                 print(f"Error recording audio: {e}")
     
     def stop_recording(self) -> None:
-        """Stop recording and start processing.
-        
-        Stops the audio recording and initiates the processing pipeline.
-        """
+        """Stop recording and start processing."""
         if self.recording:
             self.recording = False
             self.record_timer.stop()
@@ -412,7 +363,7 @@ class AudioAssistant(QMainWindow):
             self.talk_button.setText("Processing...")
             self.status_label.setText("Processing your request...")
             self.talk_button.setEnabled(False)
-            self.stop_button.setEnabled(True)
+            self.stop_button.setVisible(True)  # Show stop button when processing starts
             
             # Convert audio to numpy array
             audio_data = np.frombuffer(b''.join(self.frames), dtype=np.float32)
@@ -439,16 +390,12 @@ class AudioAssistant(QMainWindow):
     
     @Slot(str, str)
     def handle_text_update(self, message_id: str, text: str) -> None:
-        """Handle text updates from the processor.
+        """Handle text updates from the audio processor.
         
         Args:
             message_id: The ID of the message being updated
-            text: The updated text
+            text: The new text content
         """
-        # Skip user message updates for text input
-        if message_id.endswith("_user") and self.direct_text is not None:
-            return
-            
         if message_id not in self.current_messages:
             # Create new message if it doesn't exist
             is_user = message_id.endswith("_user")
@@ -518,7 +465,7 @@ class AudioAssistant(QMainWindow):
             }
         """)
         self.talk_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
+        self.stop_button.setVisible(False)  # Hide stop button when processing ends
     
     def handle_text_input_keypress(self, event):
         """Handle key press events in the text input box.
@@ -554,7 +501,7 @@ class AudioAssistant(QMainWindow):
         
         self.status_label.setText("Processing your request...")
         self.talk_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
+        self.stop_button.setVisible(True)  # Show stop button when processing starts
         
         # Start the audio processor thread
         self.processor = AudioProcessor(
@@ -574,6 +521,37 @@ class AudioAssistant(QMainWindow):
         
         # Start the processor with text input
         self.processor.start(text)
+    
+    def send_text(self) -> None:
+        """Handle text input from the text input field."""
+        text = self.text_input.text().strip()
+        if text:
+            # Clear the input field
+            self.text_input.clear()
+            
+            # Start the audio processor with the text
+            self.processor = AudioProcessor(
+                audio_data=None,
+                sample_rate=self.RATE,
+                stt_model=self.stt_model,
+                tts_model=self.tts_model,
+                tts_options=self.tts_options
+            )
+            
+            # Connect signals
+            self.processor.finished.connect(self.handle_processing_finished)
+            self.processor.error.connect(self.handle_processing_error)
+            self.processor.speaking.connect(self.handle_speaking_started)
+            self.processor.done_speaking.connect(self.handle_speaking_ended)
+            self.processor.text_update.connect(self.handle_text_update)
+            
+            # Start the processor with text input
+            self.processor.start(text)
+            
+            # Update UI state
+            self.talk_button.setEnabled(False)
+            self.stop_button.setVisible(True)  # Show stop button when processing starts
+            self.status_label.setText("Processing text input...")
     
     def closeEvent(self, event: Any) -> None:
         """Handle window close event.
