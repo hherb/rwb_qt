@@ -28,10 +28,12 @@ from agno.agent import Agent
 from agno.models.ollama import Ollama as ChatModel
 from agno.tools.duckduckgo import DuckDuckGoTools
 from agno.tools.newspaper4k import Newspaper4kTools
+#MODEL="mistral-small3.1"
+MODEL="granite3.2:8b-instruct-q8_0"
 
 # Initialize the research agent with advanced journalistic capabilities
 research_agent = Agent(
-    model=ChatModel(id="granite3.2:8b-instruct-q8_0"),
+    model=ChatModel(id=MODEL),
     tools=[DuckDuckGoTools(), Newspaper4kTools()],
     description=dedent("""\
         You are an elite investigative journalist with decades of experience at the New York Times.
@@ -119,10 +121,42 @@ research_agent = Agent(
 
 # Example usage with detailed research request
 if __name__ == "__main__":
-    research_agent.print_response(
+    stream = research_agent.run(
         "Analyze the current state and future implications of artificial intelligence regulation worldwide",
         stream=True,
+        stream_intermediate_steps=True,
     )
+    for chunk in stream:
+        # Print summary of each chunk type
+        print("\n--- New Chunk ---")
+        print(f"Event: {chunk.event}")
+        
+        # Print content if available
+        if hasattr(chunk, 'content') and chunk.content is not None:
+            print(f"Content: {chunk.content}")
+        
+        # Print tool calls if available
+        if hasattr(chunk, 'formatted_tool_calls') and chunk.formatted_tool_calls:
+            print(f"Tool Calls: {chunk.formatted_tool_calls}")
+        
+        # Print messages if available
+        if hasattr(chunk, 'messages') and chunk.messages:
+            print(f"Messages: {chunk.messages}")
+            
+        # Print context for RAG if available
+        if hasattr(chunk, 'context') and chunk.context:
+            print(f"Context: {chunk.context}")
+            
+        # Print metrics if available
+        if hasattr(chunk, 'metrics') and chunk.metrics:
+            print(f"Metrics: {chunk.metrics}")
+            
+        # Print thinking if available
+        if hasattr(chunk, 'thinking') and chunk.thinking:
+            print(f"Thinking: {chunk.thinking}")
+            
+        print("-------------------")
+    
 
 # Advanced research topics to explore:
 """

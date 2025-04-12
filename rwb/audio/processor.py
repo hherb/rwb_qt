@@ -12,7 +12,7 @@ import librosa
 from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QThread, Signal, Slot
 from typing import Optional, Any, Tuple
-from .rwbagent import RWBAgent  # Import the RWBAgent class
+from rwb.agents.rwbagent import RWBAgent  # Updated import path
 
 
 class AudioProcessor(QThread):

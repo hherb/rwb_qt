@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
 
-from .rwbagent import RWBAgent  # Import the RWBAgent class
+from rwb.agents.rwbagent import RWBAgent  # Updated import path
 
 from .processor import AudioProcessor
 from .chat_message import ChatMessage, MessageSender
