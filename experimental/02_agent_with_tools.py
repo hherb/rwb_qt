@@ -8,7 +8,9 @@ Run `pip install openai duckduckgo-search agno` to install dependencies.
 """
 
 import asyncio
+import json
 from textwrap import dedent
+from pprint import pprint
 
 from agno.agent import Agent
 from agno.models.ollama import Ollama
@@ -31,27 +33,64 @@ agent = Agent(
     """),
     tools=[DuckDuckGoTools()],
     show_tool_calls=True,
+    
     markdown=True,
     stream=True,
-    debug_mode=True,  # Enable debug mode for additional information
+    #debug_mode=True,  # Enable debug mode for additional information
 )
 
-# Example usage
-# agent.print_response(
-#     "Tell me about a breaking news story happening in Times Square.", stream=True
-# )
+
 print(f"Running agent with model: {MODEL}")
 
 async def main():
     stream = agent.run(
         "What did Dr Horst Herb do Australia?",
         stream=True,
+        stream_intermediate_steps=True,
+        #show_intermediate_steps=True,
     )
     for chunk in stream:
-        if hasattr(chunk, 'tool_calls') and chunk.tool_calls is not None:
-            print(f"Tool calls: {chunk.tool_calls}", end="")
-        if hasattr(chunk, 'content') and chunk.content is not None:
-            print(chunk.content, end="", flush=True)
+        match(chunk.event):
+            case 'RunResponse':
+                print(f"Run response: {chunk.content}")
+            case 'ToolCallStarted':
+                print(f"Tool call started: {chunk.content}")
+            case 'ToolCallCompleted':
+                print(f"Tool call completed: {chunk.content}")
+            case 'UpdatingMemory':
+                print(f"Updating memory...")
+            case 'FinalResponse':
+                print(f"Final response: {chunk.content}")
+            case _:    
+                print(f"Unknown event: {chunk.event}")
+
+        if hasattr(chunk, 'context'):
+            print('CONTEXT')
+            pprint(chunk.context)
+
+        if hasattr(chunk, 'event_data'):
+            print('EVENT DATA')
+            pprint(chunk.event_data)
+
+        if hasattr(chunk, 'messages'):
+            if chunk.messages:
+                for message in chunk.messages:
+                    if message.role == 'tool':
+                        messages = message.content
+                        msglist = json.loads(messages)
+                        pprint(msglist)
+                        for msg in msglist:
+                            print(f"Title: {msg.get('title', 'N/A')}")
+                            print(f"URL: {msg.get('href'), 'no URL'}")
+
+        
+            
+        #pprint(chunk)
+        print(f"\n{'_' * 80}\n")
+        # if hasattr(chunk, 'tool_calls') and chunk.tool_calls is not None:
+        #     print(f"Tool calls: {chunk.tool_calls}", end="")
+        # if hasattr(chunk, 'content') and chunk.content is not None:
+        #     print(chunk.content, end="", flush=True)
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -37,8 +37,10 @@ class RWBAgent:
         self.agent = Agent(
             model=Ollama(id=self.model_name),
             add_history_to_messages=True,
+            add_chat_history_to_messages=True,
             # Number of historical responses to add to the messages.
             num_history_responses=5,
+            read_chat_history=True,
             tools=[DuckDuckGoTools(), PubmedTools(), WikipediaTools(), PythonTools()],
             instructions=dedent("""You are a helpful assistant able to choose and use tools when appropriate.
             If you are not confident that you can answer the user with confidence, select the most appropriate tool
@@ -69,13 +71,21 @@ class RWBAgent:
             str: Chunks of the LLM's response
         """
         print(f"[DEBUG] astream called with prompt: {prompt[:30]}...")
-        print(f"Agent memory dump: {[m.model_dump(include={"role", "content"}) for m in self.agent.memory.messages]}")
+        # Check if memory exists before trying to access its messages
+        if hasattr(self.agent, 'memory'):
+            if self.agent.memory:
+                print(f"Agent memory dump: {[m.model_dump(include={"role", "content"}) for m in self.agent.memory.messages]}")
+            else:
+                print("Agent memory is empty")
+        else:
+            print("Agent memory not initialized yet")
         
         # Direct streaming with maximum performance
         stream = self.agent.run(prompt, 
                                 stream=True,
                                 stream_intermediate_steps=True,
         )
+        
         
         # Minimal tool call detection - only the bare minimum checks needed
         in_tool_call = False

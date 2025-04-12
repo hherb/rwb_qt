@@ -7,8 +7,9 @@ in the chat interface with proper styling and layout.
 from enum import Enum
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QTextEdit, QSizePolicy
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QTextCursor, QPixmap
 import markdown
+import os
 
 class MessageSender(Enum):
     """Enum for different types of message senders."""
@@ -29,12 +30,13 @@ class ChatMessage(QFrame):
             MessageSender.USER: {
                 "background": "#2d2d2d",
                 "margin": "right",
-                "icon": "👤"
+                "icon": "horstcartoon.png"
             },
             MessageSender.ASSISTANT: {
                 "background": "#3d3d3d",
                 "margin": "left",
-                "icon": "🤖"
+                "icon": "ollama_transparent.png",
+                "icon_background": "#add8e6"  # Light blue background
             },
             MessageSender.SYSTEM: {
                 "background": "#1d1d1d",
@@ -67,8 +69,38 @@ class ChatMessage(QFrame):
         icon_label = QLabel()
         icon_label.setFixedSize(40, 40)
         icon_label.setAlignment(Qt.AlignCenter)
-        icon_label.setStyleSheet("font-size: 24px;")
-        icon_label.setText(style['icon'])
+        
+        # Check if it's an image file or emoji
+        if style['icon'].endswith(('.png', '.jpg', '.jpeg')):
+            # Get the path to the icons directory
+            icons_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'icons')
+            icon_path = os.path.join(icons_dir, style['icon'])
+            
+            if os.path.exists(icon_path):
+                pixmap = QPixmap(icon_path)
+                # Scale the image to fit while maintaining aspect ratio
+                pixmap = pixmap.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                
+                # Apply background if specified in the style
+                if 'icon_background' in style:
+                    bg_color = style['icon_background']
+                    # Create a style with circular background
+                    icon_label.setStyleSheet(f"""
+                        background-color: {bg_color}; 
+                        border-radius: 20px;
+                        padding: 2px;
+                    """)
+                
+                icon_label.setPixmap(pixmap)
+            else:
+                # Fallback if image not found
+                icon_label.setStyleSheet("font-size: 24px;")
+                icon_label.setText("👤")
+        else:
+            # For emoji icons
+            icon_label.setStyleSheet("font-size: 24px;")
+            icon_label.setText(style['icon'])
+            
         layout.addWidget(icon_label)
         
         # Add text
