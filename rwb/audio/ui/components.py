@@ -11,10 +11,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLineEdit,
-    QTextEdit
+    QTextEdit,
+    QFrame
 )
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QColor, QPalette
 
 from .styles import (
     BUTTON_STYLE_NORMAL,
@@ -39,12 +40,45 @@ def create_status_label() -> QLabel:
     return label
 
 def create_talk_button() -> QPushButton:
-    """Create a talk button widget.
+    """Create a talk button widget with a microphone icon.
     
     Returns:
-        QPushButton: The configured talk button
+        QPushButton: The configured talk button with microphone icon
     """
-    button = QPushButton(BUTTON_TALK)
+    button = QPushButton()
+    
+    # Create a microphone icon container
+    layout = QVBoxLayout(button)
+    layout.setContentsMargins(0, 0, 0, 0)
+    
+    # Create a microphone icon widget
+    mic_container = QWidget()
+    mic_container.setFixedSize(30, 30)
+    mic_container_layout = QVBoxLayout(mic_container)
+    mic_container_layout.setContentsMargins(0, 0, 0, 0)
+    
+    # Create the microphone body
+    mic_body = QFrame(mic_container)
+    mic_body.setFixedSize(16, 22)
+    mic_body.setStyleSheet("""
+        background-color: white;
+        border-radius: 4px;
+    """)
+    
+    # Create the microphone base
+    mic_base = QFrame(mic_container)
+    mic_base.setFixedSize(20, 6)
+    mic_base.setStyleSheet("""
+        background-color: white;
+        border-radius: 3px;
+    """)
+    
+    # Position the parts
+    mic_container_layout.addWidget(mic_body, alignment=Qt.AlignHCenter | Qt.AlignTop)
+    mic_container_layout.addWidget(mic_base, alignment=Qt.AlignHCenter | Qt.AlignBottom)
+    
+    layout.addWidget(mic_container, alignment=Qt.AlignCenter)
+    
     button.setStyleSheet(BUTTON_STYLE_NORMAL)
     return button
 
@@ -55,18 +89,46 @@ def create_stop_button() -> QPushButton:
         QPushButton: The configured stop button
     """
     button = QPushButton()
-    button.setIcon(QIcon("icons/stop2.png"))
-    button.setIconSize(QSize(32, 32))
+    # Create a custom stop icon with gray background and red square
+    button.setStyleSheet("""
+        QPushButton {
+            background-color: #707070;
+            border-radius: 20px;
+            min-width: 40px;
+            min-height: 40px;
+        }
+        QPushButton:hover {
+            background-color: #808080;
+        }
+        QPushButton::pressed {
+            background-color: #606060;
+        }
+        QPushButton:disabled {
+            background-color: #505050;
+        }
+    """)
+    
+    # Add a red square in the center
+    layout = QVBoxLayout(button)
+    layout.setContentsMargins(12, 12, 12, 12)  # Create margin for the square inside the circle
+    
+    stop_square = QFrame()
+    stop_square.setFixedSize(16, 16)
+    stop_square.setFrameShape(QFrame.StyledPanel)
+    stop_square.setStyleSheet("background-color: #d32f2f;")  # Red color
+    
+    layout.addWidget(stop_square)
+    layout.setAlignment(Qt.AlignCenter)
+    
     button.setFixedSize(40, 40)
-    button.setStyleSheet(BUTTON_STYLE_STOP)
     button.setVisible(False)
     return button
 
-def create_text_input() -> QLineEdit:
+def create_text_input() -> QTextEdit:
     """Create a text input widget.
     
     Returns:
-        QLineEdit: The configured text input
+        QTextEdit: The configured text input
     """
     input_field = QTextEdit()
     input_field.setPlaceholderText("Type your message here...")

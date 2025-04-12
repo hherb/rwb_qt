@@ -6,7 +6,7 @@ handling user interaction, audio recording, and displaying the conversation.
 
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter, QHBoxLayout, QPushButton
-from PySide6.QtCore import Qt, QThread, Signal, Slot
+from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
 
@@ -64,6 +64,7 @@ class AudioAssistant(QMainWindow):
         self.processor: Optional[AudioProcessor] = None
         self.current_messages: Dict[str, ChatMessage] = {}
         self.current_message_id: str = ""  # Current session message ID
+        self.attached_files: list[str] = []  # List to store attached file paths
         
         # Create the tabbed interface
         self.setup_tabbed_ui()
@@ -151,19 +152,39 @@ class AudioAssistant(QMainWindow):
         # Create text input
         self.text_input = create_text_input()
         self.text_input.textChanged.connect(self.on_text_changed)
+        
+        # Enable enter key for sending
+        self.text_input.installEventFilter(self)
+        
         input_layout.addWidget(self.text_input, stretch=1)
+        
+        # Create a container for right-side buttons
+        right_buttons = QWidget()
+        right_layout = QHBoxLayout(right_buttons)  # Changed to horizontal layout
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)  # Space between buttons
+        
+        # Create send button
+        self.send_button = create_send_button()
+        self.send_button.setFixedHeight(75)
+        self.send_button.setVisible(False)
+        self.send_button.clicked.connect(self.send_text)
+        right_layout.addWidget(self.send_button)
         
         # Create talk button
         self.talk_button = create_talk_button()
-        self.talk_button.setFixedSize(75, 75)
+        self.talk_button.setFixedSize(75, 75)  # Make it square
         self.talk_button.pressed.connect(self.start_recording)
         self.talk_button.released.connect(self.stop_recording)
-        input_layout.addWidget(self.talk_button)
+        right_layout.addWidget(self.talk_button)
         
         # Create stop button
         self.stop_button = create_stop_button()
         self.stop_button.clicked.connect(self.stop_processing)
-        input_layout.addWidget(self.stop_button)
+        right_layout.addWidget(self.stop_button)
+        
+        # Add right buttons to input layout
+        input_layout.addWidget(right_buttons)
         
         # Add input area to main layout
         chat_layout.addWidget(input_area)
@@ -297,16 +318,17 @@ class AudioAssistant(QMainWindow):
         """Start recording audio."""
         if not self.recorder.recording:
             self.recorder.start_recording()
-            self.talk_button.setText(BUTTON_RECORDING)
             self.talk_button.setStyleSheet(BUTTON_STYLE_RECORDING)
             self.status_label.setText(STATUS_LISTENING)
+            # Hide the send button while recording
+            if hasattr(self, 'send_button'):
+                self.send_button.setVisible(False)
     
     def stop_recording(self) -> None:
         """Stop recording and start processing."""
         if self.recorder.recording:
             audio_data = self.recorder.stop_recording()
             
-            self.talk_button.setText(BUTTON_PROCESSING)
             self.status_label.setText(STATUS_PROCESSING)
             self.talk_button.setEnabled(False)
             self.stop_button.setVisible(True)
@@ -342,7 +364,6 @@ class AudioAssistant(QMainWindow):
             self.status_label.setText(STATUS_STOPPED)
             self.talk_button.setEnabled(True)
             self.stop_button.setVisible(False)
-            self.talk_button.setText(BUTTON_TALK)
             self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
     
     @Slot(str, str)
@@ -411,7 +432,6 @@ class AudioAssistant(QMainWindow):
         
         # Reset UI state
         self.status_label.setText(STATUS_READY)
-        self.talk_button.setText(BUTTON_TALK)
         self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
         self.talk_button.setEnabled(True)
         self.stop_button.setVisible(False)
@@ -435,17 +455,81 @@ class AudioAssistant(QMainWindow):
     def handle_processing_ended(self) -> None:
         """Handle the end of processing."""
         self.status_label.setText(STATUS_READY)
-        self.talk_button.setText(BUTTON_TALK)
         self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
         self.talk_button.setEnabled(True)
         self.stop_button.setVisible(False)
     
+    def on_text_changed(self) -> None:
+        """Handle text changes in the text input field."""
+        # Add a Send button if there's text, otherwise hide it
+        from PySide6.QtGui import QKeyEvent
+        from PySide6.QtCore import QEvent
+        
+        text = self.text_input.toPlainText().strip()
+        if hasattr(self, 'send_button'):
+            self.send_button.setVisible(bool(text))
+    
+    def open_file_dialog(self) -> None:
+        """Open a file dialog to select files for context."""
+        from PySide6.QtWidgets import QFileDialog
+        
+        file_dialog = QFileDialog(self)
+        file_dialog.setFileMode(QFileDialog.ExistingFiles)
+        file_dialog.setNameFilter("Supported files (*.png *.jpg *.jpeg *.pdf *.txt *.docx *.md);;All files (*)")
+        
+        if file_dialog.exec():
+            selected_files = file_dialog.selectedFiles()
+            self.process_selected_files(selected_files)
+    
+    def process_selected_files(self, file_paths: list[str]) -> None:
+        """Process the selected files for context.
+        
+        Args:
+            file_paths: List of selected file paths
+        """
+        # Add system message about attached files
+        file_names = [f.split("/")[-1] for f in file_paths]
+        message_text = f"📎 Files attached: {', '.join(file_names)}"
+        
+        # Create system message
+        system_message = ChatMessage(message_text, MessageSender.SYSTEM)
+        self.chat_layout.addWidget(system_message)
+        
+        # Store file paths for processing with the next user message
+        self.attached_files = file_paths
+        
+        # Log attachment
+        print(f"Attached files: {file_paths}")
+        
+        # TODO: Add functionality to actually process these files when sending a message 
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        """Filter events for text input to handle key presses.
+        
+        Args:
+            obj: The object the event was sent to
+            event: The event
+            
+        Returns:
+            bool: True if the event was handled, False otherwise
+        """
+        from PySide6.QtCore import QEvent, Qt
+        
+        if obj is self.text_input and event.type() == QEvent.KeyPress:
+            key_event = event
+            # Ctrl+Enter to send message
+            if (key_event.key() == Qt.Key_Return or key_event.key() == Qt.Key_Enter) and key_event.modifiers() == Qt.ControlModifier:
+                self.send_text()
+                return True
+        return super().eventFilter(obj, event)
+        
     def send_text(self) -> None:
         """Handle text input from the text input field."""
-        text = self.text_input.text().strip()
+        text = self.text_input.toPlainText().strip()
         if text:
             # Clear the input field
             self.text_input.clear()
+            self.send_button.setVisible(False)
             
             # Create a unique message ID for this session
             self.current_message_id = str(id(self))
@@ -476,6 +560,13 @@ class AudioAssistant(QMainWindow):
             # Add user message to chat history
             self.chat_history.add_message(text, user_sender, user_message_id)
             self.chat_history.complete_message(user_message_id)
+            
+            # Process attached files if any
+            if self.attached_files:
+                # TODO: Implement proper file processing
+                print(f"Processing attached files with message: {self.attached_files}")
+                # Clear the list after processing
+                self.attached_files = []
             
             # Start the processor with text input
             self.processor.start(text)

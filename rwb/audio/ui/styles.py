@@ -43,6 +43,9 @@ BUTTON_STYLE_RECORDING = """
         font-size: 16px;
         border-radius: 10px;
     }
+    QPushButton QFrame {
+        background-color: white;
+    }
 """
 
 BUTTON_STYLE_STOP = """
