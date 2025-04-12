@@ -92,6 +92,8 @@ class AudioProcessor(QThread):
             # Get user text from audio or direct input
             if self.direct_text is not None:
                 user_text = self.direct_text
+                # Skip emitting text update for direct text input as the UI already shows it
+                # This prevents duplication of user messages
             else:
                 # Convert audio data to the format expected by the STT model
                 if isinstance(self.audio_data, np.ndarray):
@@ -107,9 +109,9 @@ class AudioProcessor(QThread):
                 
                 # Convert to text
                 user_text = self.stt_model.stt((self.sample_rate, audio_data))
-            
-            # Emit user text update
-            self.text_update.emit(f"{self.current_message_id}_user", user_text)
+                
+                # Only emit text update for speech input, not for direct text
+                self.text_update.emit(f"{self.current_message_id}_user", user_text)
             
             # Get LLM response with streaming
             assistant_text = ""

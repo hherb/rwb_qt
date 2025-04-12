@@ -72,11 +72,15 @@ class ChatMessage(QFrame):
         
         # Check if it's an image file or emoji
         if style['icon'].endswith(('.png', '.jpg', '.jpeg')):
-            # Get the path to the icons directory
-            icons_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'icons')
+            # Get the path to the icons directory - correctly navigate to the rwb/icons directory
+            # Go up from audio to rwb folder, then find icons subfolder
+            icons_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icons')
             icon_path = os.path.join(icons_dir, style['icon'])
             
+            print(f"Looking for icon at: {icon_path}")
+            
             if os.path.exists(icon_path):
+                print(f"Icon found: {icon_path}")
                 pixmap = QPixmap(icon_path)
                 # Scale the image to fit while maintaining aspect ratio
                 pixmap = pixmap.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -93,6 +97,7 @@ class ChatMessage(QFrame):
                 
                 icon_label.setPixmap(pixmap)
             else:
+                print(f"Icon not found at: {icon_path}")
                 # Fallback if image not found
                 icon_label.setStyleSheet("font-size: 24px;")
                 icon_label.setText("👤")

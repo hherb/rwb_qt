@@ -37,7 +37,6 @@ class RWBAgent:
         self.agent = Agent(
             model=Ollama(id=self.model_name),
             add_history_to_messages=True,
-            add_chat_history_to_messages=True,
             # Number of historical responses to add to the messages.
             num_history_responses=5,
             read_chat_history=True,
@@ -88,32 +87,48 @@ class RWBAgent:
         
         
         # Minimal tool call detection - only the bare minimum checks needed
-        in_tool_call = False
+        # in_tool_call = False
         
         # Process each chunk immediately - minimal processing for maximum speed
         for chunk in stream:
-            # Only process content chunks
-            if not hasattr(chunk, 'content') or chunk.content is None:
-                continue
+            match(chunk.event):
+                case 'RunResponse':
+                    yield chunk.content
+                case 'RunStarted':
+                    print(f"Run started: {chunk.content}")
+                case 'ToolCallStarted':
+                    print(f"Tool call started: {chunk.content}")
+                case 'ToolCallCompleted':
+                    print(f"Tool call completed: {chunk.content}")
+                case 'UpdatingMemory':
+                    print(f"Updating memory...")
+                case 'FinalResponse':
+                    print(f"Final response: {chunk.content}")
+                case _:    
+                    print(f"Unknown event: {chunk.event}")
+
+            # # Only process content chunks
+            # if not hasattr(chunk, 'content') or chunk.content is None:
+            #     continue
                 
-            content = chunk.content
-            if not isinstance(content, str):
-                continue
+            # content = chunk.content
+            # if not isinstance(content, str):
+            #     continue
             
-            # Ultra-fast tool call detection
-            if in_tool_call:
-                # Only check for end of tool call
-                if "</tool_call>" in content or "```" in content or "}" in content:
-                    in_tool_call = False
-                continue
+            # # Ultra-fast tool call detection
+            # if in_tool_call:
+            #     # Only check for end of tool call
+            #     if "</tool_call>" in content or "```" in content or "}" in content:
+            #         in_tool_call = False
+            #     continue
             
-            # Check for start of tool call with absolute minimal checks
-            if "<tool_call>" in content or "```json" in content or ('{' in content and '"name":' in content):
-                in_tool_call = True
-                continue
+            # # Check for start of tool call with absolute minimal checks
+            # if "<tool_call>" in content or "```json" in content or ('{' in content and '"name":' in content):
+            #     in_tool_call = True
+            #     continue
             
-            # Yield immediately for lowest latency
-            yield content
+            # # Yield immediately for lowest latency
+            # yield content
                 
     def get_model_name(self) -> str:
         """Get the current model name.
