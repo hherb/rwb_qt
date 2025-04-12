@@ -5,7 +5,7 @@ handling user interaction, audio recording, and displaying the conversation.
 """
 
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter, QHBoxLayout, QPushButton
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
@@ -135,32 +135,38 @@ class AudioAssistant(QMainWindow):
         scroll_area, self.chat_container, self.chat_layout = create_chat_scroll_area()
         chat_layout.addWidget(scroll_area, stretch=1)
         
-        # Create button container
-        button_container = QWidget()
-        chat_layout.addWidget(button_container)
+        # Create input area with buttons
+        input_area = QWidget()
+        input_layout = QHBoxLayout(input_area)
+        input_layout.setContentsMargins(0, 0, 0, 0)
+        input_layout.setSpacing(10)
         
-        # Create button layout
-        button_layout = create_button_layout(button_container)
-        
-        # Create buttons
-        self.talk_button = create_talk_button()
-        self.talk_button.pressed.connect(self.start_recording)
-        self.talk_button.released.connect(self.stop_recording)
-        button_layout.addWidget(self.talk_button)
-        
-        self.stop_button = create_stop_button()
-        self.stop_button.clicked.connect(self.stop_processing)
-        button_layout.addWidget(self.stop_button)
+        # Create file attachment button
+        self.attach_button = QPushButton("+")
+        self.attach_button.setToolTip("Attach files (images, PDFs, etc.)")
+        self.attach_button.setFixedSize(40, 75)
+        self.attach_button.clicked.connect(self.open_file_dialog)
+        input_layout.addWidget(self.attach_button)
         
         # Create text input
         self.text_input = create_text_input()
-        self.text_input.returnPressed.connect(self.send_text)
-        chat_layout.addWidget(self.text_input)
+        self.text_input.textChanged.connect(self.on_text_changed)
+        input_layout.addWidget(self.text_input, stretch=1)
         
-        # Create send button
-        self.send_button = create_send_button()
-        self.send_button.clicked.connect(self.send_text)
-        chat_layout.addWidget(self.send_button)
+        # Create talk button
+        self.talk_button = create_talk_button()
+        self.talk_button.setFixedSize(75, 75)
+        self.talk_button.pressed.connect(self.start_recording)
+        self.talk_button.released.connect(self.stop_recording)
+        input_layout.addWidget(self.talk_button)
+        
+        # Create stop button
+        self.stop_button = create_stop_button()
+        self.stop_button.clicked.connect(self.stop_processing)
+        input_layout.addWidget(self.stop_button)
+        
+        # Add input area to main layout
+        chat_layout.addWidget(input_area)
     
     def setup_history_ui(self) -> None:
         """Set up the history tab user interface."""

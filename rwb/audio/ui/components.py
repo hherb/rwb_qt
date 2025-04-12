@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QLineEdit
+    QLineEdit,
+    QTextEdit
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon
@@ -67,8 +68,10 @@ def create_text_input() -> QLineEdit:
     Returns:
         QLineEdit: The configured text input
     """
-    input_field = QLineEdit()
+    input_field = QTextEdit()
     input_field.setPlaceholderText("Type your message here...")
+    input_field.setFixedHeight(75)  # 3 lines height
+    input_field.setAcceptRichText(False)
     return input_field
 
 def create_send_button() -> QPushButton:

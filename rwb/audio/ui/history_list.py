@@ -35,6 +35,14 @@ class HistoryItemWidget(QWidget):
         super().__init__(parent)
         self.file_path = file_path
         
+        # Set widget styling to prevent border residues
+        self.setStyleSheet("""
+            QWidget {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        
         # Create layout with appropriate padding
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 12, 10, 12)
@@ -154,6 +162,13 @@ class HistoryList(QWidget):
         item_margin = int(line_height * 0.25)
         border_radius = int(line_height * 0.4)
         
+        # Change the setup_ui function to adjust item selection behavior
+        self.list_widget.setSelectionBehavior(QListWidget.SelectItems)
+        self.list_widget.setSelectionMode(QListWidget.SingleSelection)
+        self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list_widget.setUniformItemSizes(True)
+        self.list_widget.setItemAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        
         # Use calculated values in the stylesheet
         self.list_widget.setStyleSheet(f"""
             QListWidget {{
@@ -161,6 +176,10 @@ class HistoryList(QWidget):
                 border-radius: {border_radius}px;
                 padding: {int(line_height*0.3)}px;
                 border: 1px solid #3a3a3a;
+                outline: none;
+                selection-background-color: transparent;
+                show-decoration-selected: 0;
+                alternate-background-color: #313131;
             }}
             QListWidget::item {{
                 color: #ffffff;
@@ -168,10 +187,15 @@ class HistoryList(QWidget):
                 border-radius: {border_radius}px;
                 margin: {item_margin}px 0px;
                 border: none;
+                outline: none;
             }}
             QListWidget::item:selected {{
                 background-color: #3d3d3d;
                 border-left: 3px solid #4CAF50;
+                border-top: none;
+                border-right: none;
+                border-bottom: none;
+                outline: none;
             }}
             QListWidget::item:alternate {{
                 background-color: #313131;
@@ -179,12 +203,21 @@ class HistoryList(QWidget):
             QListWidget::item:hover {{
                 background-color: #363636;
             }}
+            /* Remove separator lines */
+            QListView::separator {{
+                height: 0px;
+                background: transparent;
+            }}
+            
+            /* Make sure no focus outline appears */
+            *:focus {{
+                outline: none;
+            }}
         """)
         
         # Configure list widget behavior
         self.list_widget.setVerticalScrollMode(QListWidget.ScrollPerPixel)  # Smooth scrolling
         self.list_widget.setSpacing(item_margin)  # Spacing based on line height
-        self.list_widget.setSelectionMode(QListWidget.SingleSelection)  # Only select one item
         self.list_widget.itemClicked.connect(self._on_item_clicked)
         
         # Add to layout with stretch factor
@@ -218,6 +251,10 @@ class HistoryList(QWidget):
         self.history_items.clear()
         self.item_widgets.clear()
         
+        # Additional styling to remove frame focus
+        self.list_widget.setFrameShape(QListWidget.NoFrame)
+        self.list_widget.setFocusPolicy(Qt.NoFocus)
+        
         # Create history directory if it doesn't exist
         self.history_dir.mkdir(parents=True, exist_ok=True)
         
@@ -228,11 +265,11 @@ class HistoryList(QWidget):
         json_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
         
         # Add files to the list
-        for file_path in json_files:
+        for idx, file_path in enumerate(json_files):
             display_name, conversation = self._get_history_info(file_path)
             self.history_items[display_name] = file_path
             
-            # Create list item
+            # Create list item with styling to remove bright residues
             item = QListWidgetItem()
             self.list_widget.addItem(item)
             
@@ -243,6 +280,19 @@ class HistoryList(QWidget):
             
             # Set fixed height for more consistent layout
             item.setSizeHint(QSize(self.list_widget.width(), 70))
+            
+            # Apply additional styling to prevent bright borders/residues
+            item.setBackground(Qt.transparent)
+            item.setForeground(Qt.transparent)
+            
+            # Create custom item style to avoid bright residues
+            # Use alternating background colors based on index
+            custom_style = f"""
+                background-color: {'#313131' if idx % 2 == 1 else '#292929'};
+                border: none;
+                outline: none;
+            """
+            item_widget.setStyleSheet(f"QWidget {{ {custom_style} }}")
             
             # Set the widget
             self.list_widget.setItemWidget(item, item_widget)
@@ -328,6 +378,35 @@ class HistoryList(QWidget):
         widget = self.list_widget.itemWidget(item)
         if widget and isinstance(widget, HistoryItemWidget):
             file_path = widget.get_file_path()
+            
+            # Update styling for selected item
+            for i in range(self.list_widget.count()):
+                list_item = self.list_widget.item(i)
+                list_widget = self.list_widget.itemWidget(list_item)
+                idx = i  # Get the item's index
+                
+                if list_widget == widget:
+                    # Selected item
+                    list_widget.setStyleSheet("""
+                        QWidget {
+                            background-color: #3d3d3d;
+                            border-left: 3px solid #4CAF50;
+                            border-top: none;
+                            border-right: none;
+                            border-bottom: none;
+                            outline: none;
+                        }
+                    """)
+                else:
+                    # Not selected - use alternating colors
+                    custom_style = f"""
+                        background-color: {'#313131' if idx % 2 == 1 else '#292929'};
+                        border: none;
+                        outline: none;
+                    """
+                    list_widget.setStyleSheet(f"QWidget {{ {custom_style} }}")
+            
+            # Emit the signal
             self.history_selected.emit(file_path)
     
     def _delete_history(self, file_path: str) -> None:
