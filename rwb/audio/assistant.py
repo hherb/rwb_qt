@@ -10,6 +10,8 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
 
+from .rwbagent import RWBAgent  # Import the RWBAgent class
+
 from .processor import AudioProcessor
 from .chat_message import ChatMessage, MessageSender
 from .chat_history import ChatHistory
@@ -45,6 +47,9 @@ class AudioAssistant(QMainWindow):
         super().__init__()
         self.setWindowTitle("Voice Assistant")
         self.setGeometry(100, 100, 1000, 700)
+
+        # Initialize the RWB agent for LLM inference
+        self.agent = RWBAgent()
         
         # Initialize chat history
         self.chat_history = ChatHistory()
@@ -425,7 +430,7 @@ class AudioAssistant(QMainWindow):
         else:
             # If assistant message wasn't found, create it directly
             if assistant_text.strip():
-                print(f"Directly adding assistant message to history (message not found in UI)")
+                print("Directly adding assistant message to history (message not found in UI)")
                 self.chat_history.add_message(assistant_text, MessageSender.ASSISTANT, assistant_id)
                 self.chat_history.complete_message(assistant_id)
                 self.chat_history.save()
@@ -540,7 +545,8 @@ class AudioAssistant(QMainWindow):
                 sample_rate=self.recorder.RATE,
                 stt_model=self.stt_model,
                 tts_model=self.tts_model,
-                tts_options=self.tts_options
+                tts_options=self.tts_options,
+                agent=self.agent  # Pass the agent instance
             )
             
             # Connect signals

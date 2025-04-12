@@ -12,7 +12,8 @@ import librosa
 from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QThread, Signal, Slot
 from typing import Optional, Any, Tuple
-from ollama import chat
+from .rwbagent import RWBAgent  # Import the RWBAgent class
+
 
 class AudioProcessor(QThread):
     """Thread for processing audio asynchronously.
@@ -43,7 +44,8 @@ class AudioProcessor(QThread):
         sample_rate: int,
         stt_model: Any,
         tts_model: Any,
-        tts_options: Any
+        tts_options: Any,
+        agent: Optional[RWBAgent] = None  # Add agent parameter
     ):
         """Initialize the audio processor.
         
@@ -53,6 +55,7 @@ class AudioProcessor(QThread):
             stt_model: The speech-to-text model
             tts_model: The text-to-speech model
             tts_options: Options for text-to-speech synthesis
+            agent: RWBAgent for LLM inference (optional)
         """
         super().__init__()
         self.audio_data = audio_data
@@ -60,6 +63,7 @@ class AudioProcessor(QThread):
         self.stt_model = stt_model
         self.tts_model = tts_model
         self.tts_options = tts_options
+        self.agent = agent or RWBAgent()  # Use provided agent or create a default one
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.audio = pyaudio.PyAudio()
         self.direct_text: Optional[str] = None
@@ -119,60 +123,54 @@ class AudioProcessor(QThread):
             )
             
             try:
-                for response in chat(model='granite3.2:8b-instruct-q8_0', messages=[
-                    {
-                        'role': 'user',
-                        'content': user_text,
-                    },
-                ], stream=True):
-                    if 'message' in response and 'content' in response['message']:
-                        chunk = response['message']['content']
-                        assistant_text += chunk
-                        current_sentence += chunk
+                # Use the agent to stream responses
+                for chunk in self.agent.astream(user_text):
+                    assistant_text += chunk
+                    current_sentence += chunk
+                    
+                    # Emit streaming text update
+                    self.text_update.emit(f"{self.current_message_id}_assistant", assistant_text)
+                    
+                    # Check if we have a complete sentence
+                    # Look for sentence boundaries that are followed by a space or end of text
+                    sentence_end = False
+                    for end in ('.', '!', '?'):
+                        if end in current_sentence:
+                            # Check if the end is followed by a space or is at the end of the text
+                            pos = current_sentence.rfind(end)
+                            if pos == len(current_sentence) - 1 or current_sentence[pos + 1] == ' ':
+                                sentence_end = True
+                                break
                         
-                        # Emit streaming text update
-                        self.text_update.emit(f"{self.current_message_id}_assistant", assistant_text)
-                        
-                        # Check if we have a complete sentence
-                        # Look for sentence boundaries that are followed by a space or end of text
-                        sentence_end = False
-                        for end in ('.', '!', '?'):
-                            if end in current_sentence:
-                                # Check if the end is followed by a space or is at the end of the text
-                                pos = current_sentence.rfind(end)
-                                if pos == len(current_sentence) - 1 or current_sentence[pos + 1] == ' ':
-                                    sentence_end = True
-                                    break
-                        
-                        # Also consider the end of the response as a sentence boundary
-                        if sentence_end or (response['done'] and current_sentence.strip()):
-                            # Process the current sentence for TTS
-                            if current_sentence.strip():  # Only process if we have actual content
-                                tts_stream = self.tts_model.stream_tts_sync(current_sentence.strip(), options=self.tts_options)
-                                
-                                # Process each chunk of TTS audio
-                                for tts_chunk in tts_stream:
-                                    if isinstance(tts_chunk, tuple):
-                                        if len(tts_chunk) > 0:
-                                            sample_rate, audio_data = tts_chunk
-                                            if isinstance(audio_data, np.ndarray):
-                                                # Resample from Kokoro's rate to PyAudio's rate
-                                                audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=44100)
-                                                audio_bytes = audio_data.tobytes()
-                                                output_stream.write(audio_bytes)
-                                    else:
-                                        if isinstance(tts_chunk, np.ndarray):
-                                            audio_data = librosa.resample(tts_chunk, orig_sr=24000, target_sr=44100)
+                    # Also consider the end of the response as a sentence boundary
+                    if sentence_end  and current_sentence.strip():
+                        # Process the current sentence for TTS
+                        if current_sentence.strip():  # Only process if we have actual content
+                            tts_stream = self.tts_model.stream_tts_sync(current_sentence.strip(), options=self.tts_options)
+                            
+                            # Process each chunk of TTS audio
+                            for tts_chunk in tts_stream:
+                                if isinstance(tts_chunk, tuple):
+                                    if len(tts_chunk) > 0:
+                                        sample_rate, audio_data = tts_chunk
+                                        if isinstance(audio_data, np.ndarray):
+                                            # Resample from Kokoro's rate to PyAudio's rate
+                                            audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=44100)
                                             audio_bytes = audio_data.tobytes()
                                             output_stream.write(audio_bytes)
-                                        elif isinstance(tts_chunk, bytes):
-                                            audio_array = np.frombuffer(tts_chunk, dtype=np.float32)
-                                            audio_array = librosa.resample(audio_array, orig_sr=24000, target_sr=44100)
-                                            audio_bytes = audio_array.tobytes()
-                                            output_stream.write(audio_bytes)
-                                
-                                # Reset current sentence
-                                current_sentence = ""
+                                else:
+                                    if isinstance(tts_chunk, np.ndarray):
+                                        audio_data = librosa.resample(tts_chunk, orig_sr=24000, target_sr=44100)
+                                        audio_bytes = audio_data.tobytes()
+                                        output_stream.write(audio_bytes)
+                                    elif isinstance(tts_chunk, bytes):
+                                        audio_array = np.frombuffer(tts_chunk, dtype=np.float32)
+                                        audio_array = librosa.resample(audio_array, orig_sr=24000, target_sr=44100)
+                                        audio_bytes = audio_array.tobytes()
+                                        output_stream.write(audio_bytes)
+                            
+                            # Reset current sentence
+                            current_sentence = ""
                 
                 # Emit the final results
                 self.finished.emit(user_text, assistant_text)
