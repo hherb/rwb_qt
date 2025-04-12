@@ -6,12 +6,21 @@ and streaming responses, separate from audio processing.
 
 from typing import Iterator, List, Dict, Any
 import asyncio
+from textwrap import dedent
+from datetime import datetime
 
 from agno.agent import Agent
-from agno.models.ollama import OllamaTools
+from agno.models.ollama import Ollama
 from agno.tools.duckduckgo import DuckDuckGoTools
+from agno.tools.pubmed import PubmedTools
+from agno.tools.python import PythonTools
+from agno.tools.wikipedia import WikipediaTools
 
-MODEL= "phi4:latest"
+
+#MODEL= "phi4:latest"
+#MODEL="mistral-small3.1"
+MODEL = "qwen2.5:14b-instruct-q8_0"
+#MODEL= "granite3.2:8b-instruct-q8_0"
 
 
 class RWBAgent:
@@ -26,14 +35,32 @@ class RWBAgent:
         self.model_name = model_name
         print(f"Initializing RWBAgent with model: {self.model_name}")
         self.agent = Agent(
-            model=OllamaTools(id=self.model_name),
-            tools=[DuckDuckGoTools()],
-            show_tool_calls=False,
+            model=Ollama(id=self.model_name),
+            add_history_to_messages=True,
+            # Number of historical responses to add to the messages.
+            num_history_responses=5,
+            tools=[DuckDuckGoTools(), PubmedTools(), WikipediaTools(), PythonTools()],
+            instructions=dedent("""You are a helpful assistant able to choose and use tools when appropriate.
+            If you are not confident that you can answer the user with confidence, select the most appropriate tool
+            to answer. Be concise in your answer, and use markdown format where appropriate.
+            Today's date is {datetime.now().strftime('%Y-%m-%d')}.
+            
+            When using tools, ALWAYS use JSON format for tool calls like this:
+            ```json
+            {
+              "arguments": { ... },
+              "name": "tool_name"
+            }
+            ```
+            
+            DO NOT use XML-style tool calls like <tool_call> or </tool_call>.
+            After using a tool, always provide a helpful response based on the tool's output."""),
+            show_tool_calls=True,
             markdown=True,
         )
     
     def astream(self, prompt: str) -> Iterator[str]:
-        """Stream responses from the LLM.
+        """Stream responses from the LLM with absolute minimal latency.
         
         Args:
             prompt: The prompt to send to the LLM
@@ -41,17 +68,42 @@ class RWBAgent:
         Yields:
             str: Chunks of the LLM's response
         """
-        print(f"show_tool_calls is set to: {self.agent.show_tool_calls}")
-        stream = self.agent.run(prompt, stream=True)
+        print(f"[DEBUG] astream called with prompt: {prompt[:30]}...")
+        print(f"Agent memory dump: {[m.model_dump(include={"role", "content"}) for m in self.agent.memory.messages]}")
+        
+        # Direct streaming with maximum performance
+        stream = self.agent.run(prompt, 
+                                stream=True,
+                                stream_intermediate_steps=True,
+        )
+        
+        # Minimal tool call detection - only the bare minimum checks needed
+        in_tool_call = False
+        
+        # Process each chunk immediately - minimal processing for maximum speed
         for chunk in stream:
-            # Skip tool call chunks completely
-            if hasattr(chunk, 'tool_calls') and chunk.tool_calls:
+            # Only process content chunks
+            if not hasattr(chunk, 'content') or chunk.content is None:
+                continue
+                
+            content = chunk.content
+            if not isinstance(content, str):
                 continue
             
-            # Only yield content if it exists
-            if hasattr(chunk, 'content') and chunk.content is not None:
-                yield chunk.content
-
+            # Ultra-fast tool call detection
+            if in_tool_call:
+                # Only check for end of tool call
+                if "</tool_call>" in content or "```" in content or "}" in content:
+                    in_tool_call = False
+                continue
+            
+            # Check for start of tool call with absolute minimal checks
+            if "<tool_call>" in content or "```json" in content or ('{' in content and '"name":' in content):
+                in_tool_call = True
+                continue
+            
+            # Yield immediately for lowest latency
+            yield content
                 
     def get_model_name(self) -> str:
         """Get the current model name.

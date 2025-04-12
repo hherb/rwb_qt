@@ -86,27 +86,31 @@ class AudioAssistant(QMainWindow):
         
         # Create tab widget
         self.tab_widget = QTabWidget()
-        self.tab_widget.setTabPosition(QTabWidget.North)
+        self.tab_widget.setTabPosition(QTabWidget.North)  # Keep tabs at the top
         self.tab_widget.setStyleSheet("""
             QTabWidget::pane {
                 border: 1px solid #444;
-                background: #222;
+                background: #1a1a1a;  /* Darker background for better contrast */
                 border-radius: 5px;
             }
+            QTabBar {
+                alignment: left;  /* Align tabs to the left */
+            }
             QTabBar::tab {
-                background: #333;
-                color: white;
+                background: #2d2d2d;
+                color: #cccccc;
                 padding: 10px 20px;
                 border-top-left-radius: 4px;
                 border-top-right-radius: 4px;
                 margin-right: 2px;
             }
             QTabBar::tab:selected {
-                background: #444;
-                border-bottom: 2px solid #4CAF50;
+                background: #383838;
+                border-bottom: 2px solid #4CAF50;  /* Green highlight on bottom */
+                color: white;  /* Brighter text for selected tab */
             }
             QTabBar::tab:hover {
-                background: #3a3a3a;
+                background: #333333;
             }
         """)
         

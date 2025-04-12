@@ -1,0 +1,1 @@
+from datetime import datetime; current_date = datetime.now().date(); variable_to_return='current_date'
