@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCursor, QPixmap
 import markdown
 import os
+from .ui.styles import MESSAGE_USER_STYLE, MESSAGE_SYSTEM_STYLE, ICON_LABEL_STYLE
 
 class MessageSender(Enum):
     """Enum for different types of message senders."""
@@ -96,19 +97,25 @@ class ChatMessage(QFrame):
             else:
                 print(f"Icon not found at: {icon_path}")
                 # Fallback if image not found
-                icon_label.setStyleSheet("font-size: 24px;")
+                icon_label.setStyleSheet(ICON_LABEL_STYLE)
                 icon_label.setText("👤")
         else:
             # For emoji icons
-            icon_label.setStyleSheet("font-size: 24px;")
+            icon_label.setStyleSheet(ICON_LABEL_STYLE)
             icon_label.setText(style['icon'])
             
         layout.addWidget(icon_label)
         
         # Add text
-        self.text_edit = QTextEdit()
+        # Use QTextBrowser instead of QTextEdit for link handling capability
+        from PySide6.QtWidgets import QTextBrowser
+        self.text_edit = QTextBrowser()
         self.text_edit.setReadOnly(True)
         self.text_edit.setHtml(self._render_markdown(text))
+        # Set up proper link handling
+        self.text_edit.setOpenExternalLinks(False)  # Don't open links automatically
+        self.text_edit.setOpenLinks(False)  # Prevent internal navigation
+        self.text_edit.anchorClicked.connect(self._open_external_link)
         self.text_edit.setStyleSheet("""
             QTextEdit {
                 background-color: transparent;
@@ -117,10 +124,12 @@ class ChatMessage(QFrame):
                 color: #ffffff;
             }
             a {
-                color: #4CAF50;
-                text-decoration: none;
+                color: #2196F3;  /* Bright blue for better contrast */
+                text-decoration: underline;
+                font-weight: bold;
             }
             a:hover {
+                color: #64B5F6;  /* Lighter blue on hover */
                 text-decoration: underline;
             }
             code {
@@ -155,12 +164,25 @@ class ChatMessage(QFrame):
         # Convert markdown to HTML
         html = markdown.markdown(text, extensions=['fenced_code', 'codehilite'])
         
+        # Replace links with links that have title attributes for tooltips
+        # This simple regex replacement adds the URL as a title attribute to show on hover
+        import re
+        html = re.sub(r'<a href="([^"]+)"([^>]*)>',
+                     r'<a href="\1" title="\1"\2>',
+                     html)
+        
         # Add custom styling
         return f"""
             <div style="color: #ffffff;">
                 {html}
             </div>
         """
+    
+    def _open_external_link(self, url):
+        """Open links in the system's default web browser."""
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(url))
         
     def update_text(self, text: str) -> None:
         """Update the message text and adjust height."""
@@ -189,4 +211,4 @@ class ChatMessage(QFrame):
         frame_padding = 20  # Additional frame padding
         frame_height = text_height + frame_margins.top() + frame_margins.bottom() + frame_padding
         self.setMinimumHeight(frame_height)
-        self.setMaximumHeight(frame_height) 
+        self.setMaximumHeight(frame_height)

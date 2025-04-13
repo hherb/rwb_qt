@@ -25,7 +25,11 @@ from .styles import (
     STATUS_LABEL_STYLE,
     CHAT_CONTAINER_STYLE,
     BUTTON_TALK,
-    STATUS_READY
+    STATUS_READY,
+    MIC_BODY_STYLE,
+    MIC_BASE_STYLE,
+    TEXT_INPUT_STYLE,
+    SEND_BUTTON_STYLE
 )
 
 def create_status_label() -> QLabel:
@@ -60,18 +64,12 @@ def create_talk_button() -> QPushButton:
     # Create the microphone body
     mic_body = QFrame(mic_container)
     mic_body.setFixedSize(16, 22)
-    mic_body.setStyleSheet("""
-        background-color: white;
-        border-radius: 4px;
-    """)
+    mic_body.setStyleSheet(MIC_BODY_STYLE)
     
     # Create the microphone base
     mic_base = QFrame(mic_container)
     mic_base.setFixedSize(20, 6)
-    mic_base.setStyleSheet("""
-        background-color: white;
-        border-radius: 3px;
-    """)
+    mic_base.setStyleSheet(MIC_BASE_STYLE)
     
     # Position the parts
     mic_container_layout.addWidget(mic_body, alignment=Qt.AlignHCenter | Qt.AlignTop)

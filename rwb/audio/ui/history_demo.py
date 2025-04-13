@@ -22,6 +22,7 @@ from PySide6.QtCore import Qt, Slot
 
 from .history_list import HistoryList
 from ..chat_message import ChatMessage, MessageSender
+from .styles import TITLE_STYLE, SCROLL_AREA_STYLE, CHAT_CONTAINER_STYLE, INFO_FRAME_STYLE, INFO_LABEL_STYLE
 
 class HistoryDemo(QMainWindow):
     """Demo application for the HistoryList widget."""
@@ -54,50 +55,34 @@ class HistoryDemo(QMainWindow):
         
         # Add title
         chat_title = QLabel("Conversation")
-        chat_title.setStyleSheet("font-size: 16px; font-weight: bold;")
+        chat_title.setStyleSheet(TITLE_STYLE)
         right_layout.addWidget(chat_title)
         
         # Create chat scroll area similar to the main app
         self.chat_scroll = QScrollArea()
         self.chat_scroll.setWidgetResizable(True)
-        self.chat_scroll.setStyleSheet("""
-            QScrollArea {
-                background-color: #222222;
-                border-radius: 10px;
-                border: none;
-            }
-        """)
+        self.chat_scroll.setStyleSheet(SCROLL_AREA_STYLE)
         
         self.chat_container = QWidget()
         self.chat_layout = QVBoxLayout(self.chat_container)
         self.chat_layout.setAlignment(Qt.AlignTop)
         self.chat_layout.setSpacing(10)
-        self.chat_container.setStyleSheet("""
-            QWidget {
-                background-color: #222222;
-            }
-        """)
+        self.chat_container.setStyleSheet(CHAT_CONTAINER_STYLE)
         
         self.chat_scroll.setWidget(self.chat_container)
         right_layout.addWidget(self.chat_scroll, stretch=1)
         
         # Add info bar
         info_frame = QFrame()
-        info_frame.setStyleSheet("""
-            QFrame {
-                background-color: #333333;
-                border-radius: 10px;
-                padding: 5px;
-            }
-        """)
+        info_frame.setStyleSheet(INFO_FRAME_STYLE)
         info_layout = QHBoxLayout(info_frame)
         
         self.file_info_label = QLabel("No file selected")
-        self.file_info_label.setStyleSheet("color: #cccccc;")
+        self.file_info_label.setStyleSheet(INFO_LABEL_STYLE)
         info_layout.addWidget(self.file_info_label)
         
         self.message_count_label = QLabel("")
-        self.message_count_label.setStyleSheet("color: #cccccc;")
+        self.message_count_label.setStyleSheet(INFO_LABEL_STYLE)
         info_layout.addWidget(self.message_count_label, alignment=Qt.AlignRight)
         
         right_layout.addWidget(info_frame)

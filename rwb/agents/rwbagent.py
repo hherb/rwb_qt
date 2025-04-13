@@ -5,7 +5,7 @@ and streaming responses, separate from audio processing.
 """
 import os
 import pathlib
-from typing import Iterator, List, Dict, Any, Optional
+from typing import Iterator, List, Dict, Any, Optional, Union
 import asyncio
 from textwrap import dedent
 from datetime import datetime
@@ -105,7 +105,7 @@ class RWBAgent(QObject):
                         })
                 except json.JSONDecodeError:
                     self._send_feedback("Error parsing tool message as JSON", "error")
-                    #pprint(chunk)
+                    pprint(chunk)
                 except Exception as e:
                     self._send_feedback(f"Error processing citations: {str(e)}", "error")
         if message.role in ['tool']:
@@ -113,10 +113,18 @@ class RWBAgent(QObject):
             try:
                 msglist = json.loads(message.content)
                 for msg in msglist:
-                    citations.append({
-                        'title': msg.get('title', 'N/A'),
-                        'href': msg.get('href', 'no URL')
-                    })
+                    if isinstance(msg, dict):
+                        citations.append({
+                            'title': msg.get('title', 'N/A'),
+                            'href': msg.get('href', 'no URL')
+                        })
+                    elif isinstance(msg, str):
+                        print(f" >>>>>>>>> Citation found <<<<<<<<<< {msg}")
+                        # Handle string format (treat the string as both title and URL)
+                        citations.append({
+                            'title': '',
+                            'href': msg
+                        })
             except json.JSONDecodeError:
                 self._send_feedback("Error parsing assistant message as JSON", "error")
                 #pprint(chunk)
@@ -131,10 +139,31 @@ class RWBAgent(QObject):
         return citations
 
 
-    def format_citations(self, citations: List[Dict[str, str]]) -> str:
+    def format_citations(self, citations: List[Union[Dict[str, str], str]]) -> str:
+        """Format citations into a readable string.
+        
+        Args:
+            citations: List of citations, which can be either dictionaries with 'title' and 'href' keys,
+                      or simple strings containing URLs
+                      
+        Returns:
+            Formatted string with citations
+        """
+        from typing import Union
+        
         citationstr = "### References:<br>"
         for n, citation in enumerate(citations):
-            citationstr += f"{n+1}. [{citation['title']}]({citation['href']})<br>"
+            if isinstance(citation, dict):
+                # Handle dictionary format with title and href
+                title = citation.get('title', 'Reference')
+                href = citation.get('href', '#')
+                citationstr += f"{n+1}. [{title}]({href}) <small><i>({href})</i></small><br>"
+            elif isinstance(citation, str):
+                # Handle string format (treat the string as both title and URL)
+                citationstr += f"{n+1}. [{citation}]({citation}) <small><i>({citation})</i></small><br>"
+            else:
+                # Handle unexpected format
+                citationstr += f"{n+1}. Unknown reference format<br>"
         return citationstr
     
                                 

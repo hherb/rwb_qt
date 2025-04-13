@@ -8,6 +8,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 from .qt.plugin_manager import QtPluginManager
 from .audio.assistant import AudioAssistant
+from .audio.ui.styles import TOOLTIP_STYLE
 
 def main() -> None:
     """Main entry point for the application.
@@ -23,9 +24,13 @@ def main() -> None:
     
     # Create and start the application
     app = QApplication(sys.argv)
+    
+    # Apply global tooltip style
+    app.setStyleSheet(TOOLTIP_STYLE)
+    
     window = AudioAssistant()
     window.show()
     sys.exit(app.exec())
 
 if __name__ == '__main__':
-    main() 
+    main()

@@ -6,7 +6,8 @@ handling user interaction, audio recording, and displaying the conversation.
 
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter, QHBoxLayout, QPushButton
-from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent
+from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent, QSettings, QSize
+from PySide6.QtGui import QIcon
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
 
@@ -16,6 +17,7 @@ from .processor import AudioProcessor
 from .chat_message import ChatMessage, MessageSender
 from .chat_history import ChatHistory
 from .recorder import AudioRecorder
+from .ui.settings_dialog import SettingsDialog
 from .ui.components import (
     create_status_label,
     create_talk_button,
@@ -35,7 +37,10 @@ from .ui.styles import (
     BUTTON_RECORDING,
     BUTTON_PROCESSING,
     BUTTON_STYLE_NORMAL,
-    BUTTON_STYLE_RECORDING
+    BUTTON_STYLE_RECORDING,
+    SETTINGS_BUTTON_STYLE,
+    TAB_WIDGET_STYLE,
+    SPLITTER_STYLE
 )
 from .ui.history_list import HistoryList
 
@@ -47,6 +52,9 @@ class AudioAssistant(QMainWindow):
         super().__init__()
         self.setWindowTitle("Voice Assistant")
         self.setGeometry(100, 100, 1000, 700)
+        
+        # Initialize settings
+        self.settings = QSettings("RWB", "VoiceAssistant")
         
         # Initialize chat history
         self.chat_history = ChatHistory()
@@ -61,11 +69,11 @@ class AudioAssistant(QMainWindow):
         # Initialize audio recorder
         self.recorder = AudioRecorder()
         
-        # Initialize models
+        # Initialize models with settings
         self.stt_model = get_stt_model()
         self.tts_model = get_tts_model(model="kokoro")
         self.tts_options = KokoroTTSOptions(
-            voice="bf_emma",
+            voice=self.settings.value("tts/voice", "bf_emma"),
             speed=1.0,
             lang="en-us"
         )
@@ -88,35 +96,31 @@ class AudioAssistant(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
+        # Create a toolbar-like area at the top for settings button
+        toolbar = QWidget()
+        toolbar_layout = QHBoxLayout(toolbar)
+        toolbar_layout.setContentsMargins(10, 5, 10, 0)
+        
+        # Create settings button with cogwheel icon
+        self.settings_button = QPushButton()
+        self.settings_button.setIcon(QIcon("rwb/icons/cogwheel.png"))
+        self.settings_button.setIconSize(QSize(24, 24))
+        self.settings_button.setFixedSize(32, 32)
+        self.settings_button.setToolTip("Settings")
+        self.settings_button.setStyleSheet(SETTINGS_BUTTON_STYLE)
+        self.settings_button.clicked.connect(self.open_settings_dialog)
+        
+        # Add settings button to toolbar layout
+        toolbar_layout.addWidget(self.settings_button)
+        toolbar_layout.addStretch(1)  # Push settings button to the left
+        
+        # Add toolbar to main layout
+        main_layout.addWidget(toolbar)
+        
         # Create tab widget
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabPosition(QTabWidget.North)  # Keep tabs at the top
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #444;
-                background: #1a1a1a;  /* Darker background for better contrast */
-                border-radius: 5px;
-            }
-            QTabBar {
-                alignment: left;  /* Align tabs to the left */
-            }
-            QTabBar::tab {
-                background: #2d2d2d;
-                color: #cccccc;
-                padding: 10px 20px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-                margin-right: 2px;
-            }
-            QTabBar::tab:selected {
-                background: #383838;
-                border-bottom: 2px solid #4CAF50;  /* Green highlight on bottom */
-                color: white;  /* Brighter text for selected tab */
-            }
-            QTabBar::tab:hover {
-                background: #333333;
-            }
-        """)
+        self.tab_widget.setStyleSheet(TAB_WIDGET_STYLE)
         
         # Create main chat tab
         self.chat_tab = QWidget()
@@ -217,16 +221,7 @@ class AudioAssistant(QMainWindow):
         # Create splitter for horizontal layout
         splitter = QSplitter(Qt.Horizontal)
         splitter.setChildrenCollapsible(False)  # Prevent collapsing sections completely
-        splitter.setStyleSheet("""
-            QSplitter::handle {
-                background-color: #444;
-                width: 2px;
-                margin: 2px;
-            }
-            QSplitter::handle:hover {
-                background-color: #4CAF50;
-            }
-        """)
+        splitter.setStyleSheet(SPLITTER_STYLE)
         
         # Create history list widget (left side)
         self.history_list = HistoryList()
@@ -631,8 +626,32 @@ class AudioAssistant(QMainWindow):
         system_message = ChatMessage(formatted_message, MessageSender.SYSTEM)
         self.chat_layout.addWidget(system_message)
         
+        # Save system message to chat history
+        system_message_id = f"{id(message)}_{message_type}_system"
+        self.chat_history.add_message(formatted_message, MessageSender.SYSTEM, system_message_id)
+        self.chat_history.complete_message(system_message_id)
+        self.chat_history.save()
+        
         # Scroll to show the message
         scroll_area = self.chat_container.parent().parent()
         scroll_area.verticalScrollBar().setValue(
             scroll_area.verticalScrollBar().maximum()
         )
+    
+    def open_settings_dialog(self) -> None:
+        """Open the settings dialog."""
+        dialog = SettingsDialog(self)
+        if dialog.exec():
+            # Reload settings that might have changed
+            self.tts_options.voice = self.settings.value("tts/voice", "bf_emma")
+            
+            # Update the model name if needed
+            model_name = self.settings.value("model/name", "")
+            if model_name and hasattr(self, 'agent'):
+                # Update the agent's model name if possible
+                # This might need to be implemented in the RWBAgent class
+                try:
+                    self.agent.set_model_name(model_name)
+                except AttributeError:
+                    # If the agent doesn't have this method, just log it
+                    print(f"Note: Agent doesn't support changing model name to {model_name}")
