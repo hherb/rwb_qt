@@ -107,6 +107,8 @@ class RWBAgent(QObject):
                     self._send_feedback("Error parsing tool message as JSON", "error")
                     pprint(chunk)
                 except Exception as e:
+                    print(f" Error processing citations: {str(e)}")
+                    pprint(chunk)
                     self._send_feedback(f"Error processing citations: {str(e)}", "error")
         if message.role in ['tool']:
             # Add citations from the assistant's message
@@ -129,6 +131,8 @@ class RWBAgent(QObject):
                 self._send_feedback("Error parsing assistant message as JSON", "error")
                 #pprint(chunk)
             except Exception as e:
+                print(f"*********** Error processing citations: {str(e)}")
+                pprint(chunk)
                 self._send_feedback(f"Error processing citations: {str(e)}", "error")
         # If citations were found, format and send feedback
         if citations:

@@ -159,10 +159,21 @@ class AudioAssistant(QMainWindow):
         input_layout.setContentsMargins(0, 0, 0, 0)
         input_layout.setSpacing(10)
         
-        # Create file attachment button
-        self.attach_button = QPushButton("+")
+        # Create file attachment button with paperclip icon
+        self.attach_button = QPushButton()
+        self.attach_button.setIcon(QIcon("rwb/icons/paperclip.png"))
+        self.attach_button.setIconSize(QSize(24, 24))
         self.attach_button.setToolTip("Attach files (images, PDFs, etc.)")
-        self.attach_button.setFixedSize(40, 75)
+        self.attach_button.setFixedSize(40, 40)
+        self.attach_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0;
+                border-radius: 20px;
+            }
+            QPushButton:hover {
+                background-color: #d0d0d0;
+            }
+        """)
         self.attach_button.clicked.connect(self.open_file_dialog)
         input_layout.addWidget(self.attach_button)
         
@@ -326,7 +337,7 @@ class AudioAssistant(QMainWindow):
         """Start recording audio."""
         if not self.recorder.recording:
             self.recorder.start_recording()
-            self.talk_button.setStyleSheet(BUTTON_STYLE_RECORDING)
+            self.talk_button.setIcon(QIcon("rwb/icons/sst_red.png"))
             self.status_label.setText(STATUS_LISTENING)
             # Hide the send button while recording
             if hasattr(self, 'send_button'):
@@ -339,6 +350,7 @@ class AudioAssistant(QMainWindow):
             
             self.status_label.setText(STATUS_PROCESSING)
             self.talk_button.setEnabled(False)
+            self.talk_button.setIcon(QIcon("rwb/icons/sst_green.png"))  # Reset icon back to green
             self.stop_button.setVisible(True)
             
             # Create a unique message ID for this session

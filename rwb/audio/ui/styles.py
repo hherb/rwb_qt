@@ -51,7 +51,7 @@ BUTTON_STYLE_NORMAL = """
         background-color: #45a049;
     }
     QPushButton:disabled {
-        background-color: #2d2d2d;
+        background-color: COLOR_GRAY_MEDIUM;
     }
 """
 
@@ -110,7 +110,7 @@ TAB_WIDGET_STYLE = """
         alignment: left;  /* Align tabs to the left */
     }
     QTabBar::tab {
-        background: #2d2d2d;
+        background: COLOR_GRAY_MEDIUM;
         color: #cccccc;
         padding: 10px 20px;
         border-top-left-radius: 4px;
@@ -147,7 +147,7 @@ SCROLL_AREA_STYLE = """
     }
     QScrollBar:vertical {
         border: none;
-        background: #2d2d2d;
+        background: COLOR_GRAY_MEDIUM;
         width: 10px;
         margin: 0px;
     }

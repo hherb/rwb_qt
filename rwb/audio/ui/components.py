@@ -50,34 +50,21 @@ def create_talk_button() -> QPushButton:
         QPushButton: The configured talk button with microphone icon
     """
     button = QPushButton()
-    
-    # Create a microphone icon container
-    layout = QVBoxLayout(button)
-    layout.setContentsMargins(0, 0, 0, 0)
-    
-    # Create a microphone icon widget
-    mic_container = QWidget()
-    mic_container.setFixedSize(30, 30)
-    mic_container_layout = QVBoxLayout(mic_container)
-    mic_container_layout.setContentsMargins(0, 0, 0, 0)
-    
-    # Create the microphone body
-    mic_body = QFrame(mic_container)
-    mic_body.setFixedSize(16, 22)
-    mic_body.setStyleSheet(MIC_BODY_STYLE)
-    
-    # Create the microphone base
-    mic_base = QFrame(mic_container)
-    mic_base.setFixedSize(20, 6)
-    mic_base.setStyleSheet(MIC_BASE_STYLE)
-    
-    # Position the parts
-    mic_container_layout.addWidget(mic_body, alignment=Qt.AlignHCenter | Qt.AlignTop)
-    mic_container_layout.addWidget(mic_base, alignment=Qt.AlignHCenter | Qt.AlignBottom)
-    
-    layout.addWidget(mic_container, alignment=Qt.AlignCenter)
-    
-    button.setStyleSheet(BUTTON_STYLE_NORMAL)
+    button.setIcon(QIcon("rwb/icons/sst_green.png"))
+    button.setIconSize(QSize(32, 32))
+    button.setToolTip("Hold to talk")
+    button.setStyleSheet("""
+        QPushButton {
+            background-color: #e0e0e0;
+            border-radius: 37px;
+        }
+        QPushButton:hover {
+            background-color: #d0d0d0;
+        }
+        QPushButton:pressed {
+            background-color: #c0c0c0;
+        }
+    """)
     return button
 
 def create_stop_button() -> QPushButton:
@@ -87,37 +74,23 @@ def create_stop_button() -> QPushButton:
         QPushButton: The configured stop button
     """
     button = QPushButton()
-    # Create a custom stop icon with gray background and red square
+    button.setIcon(QIcon("rwb/icons/stop_red.png"))
+    button.setIconSize(QSize(24, 24))
+    button.setToolTip("Stop processing")
     button.setStyleSheet("""
         QPushButton {
-            background-color: #707070;
+            background-color: #e0e0e0;
             border-radius: 20px;
             min-width: 40px;
             min-height: 40px;
         }
         QPushButton:hover {
-            background-color: #808080;
+            background-color: #d0d0d0;
         }
-        QPushButton::pressed {
-            background-color: #606060;
-        }
-        QPushButton:disabled {
-            background-color: #505050;
+        QPushButton:pressed {
+            background-color: #c0c0c0;
         }
     """)
-    
-    # Add a red square in the center
-    layout = QVBoxLayout(button)
-    layout.setContentsMargins(12, 12, 12, 12)  # Create margin for the square inside the circle
-    
-    stop_square = QFrame()
-    stop_square.setFixedSize(16, 16)
-    stop_square.setFrameShape(QFrame.StyledPanel)
-    stop_square.setStyleSheet("background-color: #d32f2f;")  # Red color
-    
-    layout.addWidget(stop_square)
-    layout.setAlignment(Qt.AlignCenter)
-    
     button.setFixedSize(40, 40)
     button.setVisible(False)
     return button
@@ -132,6 +105,16 @@ def create_text_input() -> QTextEdit:
     input_field.setPlaceholderText("Type your message here...")
     input_field.setFixedHeight(75)  # 3 lines height
     input_field.setAcceptRichText(False)
+    input_field.setStyleSheet("""
+        QTextEdit {
+            background-color: #f0f0f0;
+            color: #333333;
+            border: none;
+            border-radius: 20px;
+            padding: 15px;
+            selection-background-color: #4CAF50;
+        }
+    """)
     return input_field
 
 def create_send_button() -> QPushButton:
@@ -140,7 +123,22 @@ def create_send_button() -> QPushButton:
     Returns:
         QPushButton: The configured send button
     """
-    return QPushButton("Send")
+    button = QPushButton()
+    button.setIcon(QIcon("rwb/icons/send_blue.png"))
+    button.setIconSize(QSize(24, 24))
+    button.setToolTip("Send message")
+    button.setStyleSheet("""
+        QPushButton {
+            background-color: #e0e0e0;
+            border-radius: 20px;
+            min-width: 40px;
+            min-height: 40px;
+        }
+        QPushButton:hover {
+            background-color: #d0d0d0;
+        }
+    """)
+    return button
 
 def create_chat_scroll_area() -> tuple[QScrollArea, QWidget, QVBoxLayout]:
     """Create a scroll area for chat messages.
