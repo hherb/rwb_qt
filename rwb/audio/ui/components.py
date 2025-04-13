@@ -21,6 +21,7 @@ from .styles import (
     BUTTON_STYLE_NORMAL,
     BUTTON_STYLE_RECORDING,
     BUTTON_STYLE_STOP,
+    BUTTON_STYLE_MUTE,
     SCROLL_AREA_STYLE,
     STATUS_LABEL_STYLE,
     CHAT_CONTAINER_STYLE,
@@ -55,11 +56,11 @@ def create_talk_button() -> QPushButton:
     button.setToolTip("Hold to talk")
     button.setStyleSheet("""
         QPushButton {
-            background-color: #e0e0e0;
+            background-color: #2d2d2d;
             border-radius: 37px;
         }
         QPushButton:hover {
-            background-color: #d0d0d0;
+            background-color: #3d3d3d;
         }
         QPushButton:pressed {
             background-color: #c0c0c0;
@@ -91,6 +92,21 @@ def create_stop_button() -> QPushButton:
             background-color: #c0c0c0;
         }
     """)
+    button.setFixedSize(40, 40)
+    button.setVisible(False)
+    return button
+
+def create_mute_button() -> QPushButton:
+    """Create a mute button widget to stop voice output.
+    
+    Returns:
+        QPushButton: The configured mute button
+    """
+    button = QPushButton()
+    button.setIcon(QIcon("rwb/icons/mute.png"))
+    button.setIconSize(QSize(24, 24))
+    button.setToolTip("Stop voice output")
+    button.setStyleSheet(BUTTON_STYLE_MUTE)
     button.setFixedSize(40, 40)
     button.setVisible(False)
     return button

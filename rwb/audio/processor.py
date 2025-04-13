@@ -309,6 +309,24 @@ class AudioProcessor(QObject):
         """Cancel any ongoing processing."""
         self.processing_cancelled = True
     
+    def clear_tts_queue(self):
+        """Clear the TTS queue to stop any pending speech output."""
+        try:
+            # Clear the queue while preserving its reference
+            while not self.tts_queue.empty():
+                try:
+                    self.tts_queue.get_nowait()
+                    self.tts_queue.task_done()
+                except queue.Empty:
+                    break
+            
+            # Cancel any ongoing processing
+            self.cancel_processing()
+            
+            print("TTS queue cleared successfully")
+        except Exception as e:
+            print(f"Error clearing TTS queue: {e}")
+    
     def disconnect_signals(self) -> None:
         """Disconnect all signals safely to prevent memory leaks.
         
@@ -324,6 +342,15 @@ class AudioProcessor(QObject):
             # Signals were not connected or error occurred
             pass
     
+    def cleanup(self) -> None:
+        """Clean up audio resources, specifically terminating PyAudio."""
+        try:
+            if self.audio:
+                self.audio.terminate()
+                print("PyAudio terminated.")
+        except Exception as e:
+            print(f"Error terminating PyAudio: {e}")
+
     def tts(self, text: str) -> None:
         """Convert text to speech and play it in a separate thread.
         

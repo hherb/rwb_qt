@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "agno>=1.2.15",
+    "biopython>=1.85",
     "duckduckgo-search>=8.0.0",
     "fastrtc[stt,tts,vad]>=0.0.20",
     "ipython>=9.1.0",

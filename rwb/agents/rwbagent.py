@@ -22,7 +22,8 @@ from rwb.agents.worker import InputProcessorWorker
 from agno.agent import Agent
 from agno.models.ollama import Ollama
 from agno.tools.duckduckgo import DuckDuckGoTools
-from agno.tools.pubmed import PubmedTools
+#from agno.tools.pubmed import PubmedTools. #it sucks
+from rwb.tools.pubmed import PubMedTools
 from agno.tools.python import PythonTools
 from agno.tools.wikipedia import WikipediaTools
 
@@ -70,7 +71,7 @@ class RWBAgent(QObject):
             num_history_responses=5,
             read_chat_history=True,
             tools=[DuckDuckGoTools(), 
-                   PubmedTools(email=AUTHOR_EMAIL, max_results=20), 
+                   PubMedTools(email=AUTHOR_EMAIL, max_results=20), 
                    WikipediaTools(), 
                    PythonTools(base_dir=PYTHONTOOLS_BASEDIR)],
             instructions=dedent(f"""Your name is Emily. Today's actual date is {datetime.now().strftime('%Y-%m-%d')}.
@@ -162,6 +163,37 @@ class RWBAgent(QObject):
         # Process the text input
         self.process_user_input(text)
 
+    def parse_citation(self, msg: Dict[str, str]|str) -> Dict[str, str]:
+        if not msg:
+            return []
+        if 'title' in msg and 'href' in msg:
+            # Handle dictionary format with title and href
+            return({
+                'format': 'websearch',
+                'title': msg.get('title', 'N/A'),
+                'href': msg.get('href', 'no URL')
+            })
+        elif 'pmid' in msg:
+            #Handle pubmed tool format
+            return({
+                'format': 'pubmed',
+                'pmid': msg.get('pmid', 'N/A'),
+                'title': msg.get('title', 'N/A'),
+                'authors': msg.get('authors', 'N/A'),
+                'publication_date': msg.get('publication_date', 'N/A'),
+                'journal': msg.get('journal', 'N/A'),
+                'doi': msg.get('doi', 'N/A'),
+                'abstract': msg.get('abstract', 'N/A')
+            })
+        elif type(msg) == str:
+            # Handle string format (treat the string as both title and URL)
+            return({
+                'format': 'unknown',
+                'title': msg,
+                'href': msg
+            })
+
+
     def get_citations(self, chunk: Any) -> List[Dict[str, str]]:
         """Extract citations from the chunk content.
         
@@ -177,56 +209,40 @@ class RWBAgent(QObject):
         if not hasattr(chunk, 'messages') or not chunk.messages:
             return citations
             
-        # Collect all citations from tool messages
-        for message in chunk.messages:
+        # Get only the last 'tool' message - traverse from last to first
+        last_tool_message = None
+        for message in reversed(chunk.messages):
             if message.role == 'tool':
-                try:
-                    # Parse JSON content
-                    msglist = json.loads(message.content)
-                    
-                    # Add each citation
-                    for msg in msglist:
-                        citations.append({
-                            'title': msg.get('title', 'N/A'),
-                            'href': msg.get('href', 'no URL')
-                        })
-                except json.JSONDecodeError:
-                    self._send_feedback("Error parsing tool message as JSON", "error")
-                    pprint(chunk)
-                except Exception as e:
-                    print(f" Error processing citations: {str(e)}")
-                    pprint(chunk)
-                    self._send_feedback(f"Error processing citations: {str(e)}", "error")
-        if message.role in ['tool']:
-            # Add citations from the assistant's message
+                last_tool_message = message
+                break
+                
+        # Process only the last tool message if found
+        if last_tool_message:
             try:
-                msglist = json.loads(message.content)
+                # Parse JSON content - check if content is already a list or needs parsing
+                if isinstance(last_tool_message.content, list):
+                    msglist = last_tool_message.content
+                else:
+                    msglist = json.loads(last_tool_message.content)
+                
+                # Add each citation for web search
                 for msg in msglist:
-                    if isinstance(msg, dict):
-                        citations.append({
-                            'title': msg.get('title', 'N/A'),
-                            'href': msg.get('href', 'no URL')
-                        })
-                    elif isinstance(msg, str):
-                        print(f" >>>>>>>>> Citation found <<<<<<<<<< {msg}")
-                        # Handle string format (treat the string as both title and URL)
-                        citations.append({
-                            'title': '',
-                            'href': msg
-                        })
+                    citation = self.parse_citation(msg)
+                    if citation:
+                        citations.append(citation)
+                    
             except json.JSONDecodeError:
-                self._send_feedback("Error parsing assistant message as JSON", "error")
-                #pprint(chunk)
+                self._send_feedback("Error parsing tool message as JSON", "error")
+                pprint(chunk)
             except Exception as e:
-                print(f"*********** Error processing citations: {str(e)}")
+                print(f"Error processing citations: {str(e)}")
                 pprint(chunk)
                 self._send_feedback(f"Error processing citations: {str(e)}", "error")
+
         # If citations were found, format and send feedback
         if citations:
             citationsstring = self.format_citations(citations)
             self._send_feedback(citationsstring, "info")
-            #print(" >>>>>>>>> Citation found <<<<<<<<<< ")
-            #pprint(chunk)
         return citations
 
 
@@ -246,9 +262,19 @@ class RWBAgent(QObject):
         for n, citation in enumerate(citations):
             if isinstance(citation, dict):
                 # Handle dictionary format with title and href
-                title = citation.get('title', 'Reference')
-                href = citation.get('href', '#')
-                citationstr += f"{n+1}. [{title}]({href}) <small><i>({href})</i></small><br>"
+                citation_type = citation.get('format', 'unknown')
+                if citation_type == 'pubmed':
+                    pmid = citation.get('pmid', None)
+                    urlstr="""https://pubmed.ncbi.nlm.nih.gov"""
+                    if pmid:
+                        urlstr = f"""{urlstr}/{pmid}/"""
+                    citationstr += f"""- [{n+1}. PMID: {citation.get('pmid', 'N/A')} {citation.get('title', 'no title')}]({urlstr}) <br><small><i>Athors: {citation.get('authors', 'authors unknow')[:50]}...</i></small><br><br>"""
+                elif citation_type == 'websearch':
+                    # Handle web search format
+                    citationstr += f"{n+1}. [{citation.get('title', 'N/A')}]({citation.get('href', 'no URL')}) <small><i>({citation.get('href', 'no URL')})</i></small><br>"
+                else:
+                    # Handle unknown format
+                    citationstr += f"{n+1}. {str(citation)}<br>"
             elif isinstance(citation, str):
                 # Handle string format (treat the string as both title and URL)
                 citationstr += f"{n+1}. [{citation}]({citation}) <small><i>({citation})</i></small><br>"
@@ -267,7 +293,7 @@ class RWBAgent(QObject):
         Yields:
             str: Chunks of the LLM's response
         """
-        self._send_feedback(f"Processing query: {prompt[:30]}...", "debug")
+        # Debug message moved to process_user_input to avoid duplication
         
         stream = self.agent.run(prompt, 
                                 stream=True,

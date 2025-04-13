@@ -206,9 +206,10 @@ class ChatMessage(QFrame):
         text_height = max(min_text_height, doc_height) + margins.top() + margins.bottom() + padding
         self.text_edit.setFixedHeight(text_height)
         
-        # Update the frame's minimum height
+        # Update the frame's minimum height with reduced padding
         frame_margins = self.contentsMargins()
-        frame_padding = 20  # Additional frame padding
+        # Reduce the padding to a single line height
+        frame_padding = self.text_edit.fontMetrics().height()  
         frame_height = text_height + frame_margins.top() + frame_margins.bottom() + frame_padding
         self.setMinimumHeight(frame_height)
         self.setMaximumHeight(frame_height)

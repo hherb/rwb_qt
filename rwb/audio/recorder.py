@@ -94,13 +94,17 @@ class AudioRecorder:
             if self.record_timer:
                 self.record_timer.stop()
             
-            if self.input_stream:
-                self.input_stream.stop_stream()
-                self.input_stream.close()
+            if self.input_stream and self.input_stream.is_active():
+                try:
+                    self.input_stream.stop_stream()
+                    self.input_stream.close()
+                except Exception as e:
+                    print(f"Error stopping audio stream: {e}")
             
             # Convert audio to numpy array
-            audio_data = np.frombuffer(b''.join(self.frames), dtype=np.float32)
-            return audio_data.reshape(1, -1)
+            if self.frames:
+                audio_data = np.frombuffer(b''.join(self.frames), dtype=np.float32)
+                return audio_data.reshape(1, -1)
         
         return np.array([])
     

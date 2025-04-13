@@ -84,11 +84,27 @@ BUTTON_STYLE_STOP = """
     }
 """
 
+# Mute button style
+BUTTON_STYLE_MUTE = """
+    QPushButton {
+        background-color: #e0e0e0;
+        border-radius: 20px;
+        min-width: 40px;
+        min-height: 40px;
+    }
+    QPushButton:hover {
+        background-color: #d0d0d0;
+    }
+    QPushButton:pressed {
+        background-color: #c0c0c0;
+    }
+"""
+
 # Settings button style
 SETTINGS_BUTTON_STYLE = """
     QPushButton {
-        background-color: transparent;
-        border: none;
+        background-color: COLOR_GRAY_LIGHT;
+        border: 1px solid #444;
         border-radius: 16px;
     }
     QPushButton:hover {
@@ -108,6 +124,10 @@ TAB_WIDGET_STYLE = """
     }
     QTabBar {
         alignment: left;  /* Align tabs to the left */
+        background: #1a1a1a;  /* Match the dark theme background */
+    }
+    QTabWidget > QWidget {
+        background: #1a1a1a;  /* Ensure the space around tabs follows dark theme */
     }
     QTabBar::tab {
         background: COLOR_GRAY_MEDIUM;

@@ -6,7 +6,7 @@ handling user interaction, audio recording, and displaying the conversation.
 
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter, QHBoxLayout, QPushButton
-from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent, QSettings, QSize
+from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent, QSettings, QSize, QTimer
 from PySide6.QtGui import QIcon
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
@@ -22,6 +22,7 @@ from .ui.components import (
     create_status_label,
     create_talk_button,
     create_stop_button,
+    create_mute_button,
     create_text_input,
     create_send_button,
     create_chat_scroll_area,
@@ -52,6 +53,18 @@ class AudioAssistant(QMainWindow):
         super().__init__()
         self.setWindowTitle("Voice Assistant")
         self.setGeometry(100, 100, 1000, 700)
+        
+        # Set the dark theme for the entire window
+        self.setStyleSheet("""
+            QMainWindow, QWidget {
+                background-color: #1a1a1a;
+                color: #cccccc;
+            }
+            QTabWidget::pane {
+                background-color: #1a1a1a;
+                border: none;
+            }
+        """)
         
         # Initialize settings
         self.settings = QSettings("RWB", "VoiceAssistant")
@@ -119,7 +132,7 @@ class AudioAssistant(QMainWindow):
         
         # Create settings button with cogwheel icon
         self.settings_button = QPushButton()
-        self.settings_button.setIcon(QIcon("rwb/icons/cogwheel.png"))
+        self.settings_button.setIcon(QIcon("rwb/icons/settings.png"))
         self.settings_button.setIconSize(QSize(24, 24))
         self.settings_button.setFixedSize(32, 32)
         self.settings_button.setToolTip("Settings")
@@ -226,6 +239,11 @@ class AudioAssistant(QMainWindow):
         self.stop_button = create_stop_button()
         self.stop_button.clicked.connect(self.stop_processing)
         right_layout.addWidget(self.stop_button)
+        
+        # Create mute button
+        self.mute_button = create_mute_button()
+        self.mute_button.clicked.connect(self.stop_voice_output)
+        right_layout.addWidget(self.mute_button)
         
         # Add right buttons to input layout
         input_layout.addWidget(right_buttons)
@@ -467,11 +485,35 @@ class AudioAssistant(QMainWindow):
     def handle_speaking_started(self) -> None:
         """Handle the start of speech synthesis."""
         self.status_label.setText(STATUS_SPEAKING)
+        # Show mute button when speaking starts
+        self.mute_button.setVisible(True)
     
     @Slot()
     def handle_speaking_ended(self) -> None:
         """Handle the end of speech synthesis."""
         self.handle_processing_ended()
+        # Hide mute button when speaking ends
+        self.mute_button.setVisible(False)
+        
+    def stop_voice_output(self) -> None:
+        """Stop the currently playing voice output."""
+        if self.processor:
+            # First clear the TTS queue to prevent any new sentences from being spoken
+            self.processor.clear_tts_queue()
+            
+            # Emit the done_speaking signal to stop current TTS playback
+            self.processor.done_speaking.emit()
+            
+            # Cancel any ongoing processing
+            self.processor.cancel_processing()
+            
+            # Update UI
+            self.status_label.setText(STATUS_STOPPED)
+            # Hide mute button after stopping voice output
+            self.mute_button.setVisible(False)
+            
+            # Reset cancellation flag after a short delay to allow for proper cleanup
+            QTimer.singleShot(100, self.processor.reset_cancellation_flag)
     
     def handle_processing_ended(self) -> None:
         """Handle the end of processing."""
@@ -589,7 +631,14 @@ class AudioAssistant(QMainWindow):
         
         # Clean up audio processor resources
         if self.processor:
-            self.processor.close()
+            # Cancel any ongoing processing
+            self.processor.cancel_processing()
+            # Stop the TTS queue processor thread
+            self.processor.stop_tts_queue_processor()
+            # Disconnect signals to prevent memory leaks
+            self.processor.disconnect_signals()
+            # Terminate PyAudio
+            self.processor.cleanup()
         
         # Save chat history before closing
         self.chat_history.save()
@@ -611,18 +660,37 @@ class AudioAssistant(QMainWindow):
             # Skip debug messages in the UI for now
             # Could add a setting to enable/disable debug messages
             return
-        
+            
         # Format the message based on type
-        if message_type == "error":
-            formatted_message = f"⚠️ {message}"
-        elif message_type == "info":
-            formatted_message = f"ℹ️ {message}"
-        else:
-            formatted_message = message
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%H:%M:%S")
         
-        # Create system message in chat UI
-        system_message = ChatMessage(formatted_message, MessageSender.SYSTEM)
-        self.chat_layout.addWidget(system_message)
+        if message_type == "error":
+            prefix = "⚠️"
+        elif message_type == "info":
+            prefix = "ℹ️"
+        else:
+            prefix = "•"
+            
+        formatted_message = f"[{timestamp}] {prefix} {message}"
+        
+        # Check if there's already a system message widget
+        system_message = None
+        for i in range(self.chat_layout.count()):
+            widget = self.chat_layout.itemAt(i).widget()
+            if isinstance(widget, ChatMessage) and widget.sender == MessageSender.SYSTEM:
+                system_message = widget
+                break
+                
+        if system_message:
+            # Update existing system message with new content
+            current_text = system_message.text_edit.toPlainText()
+            updated_text = f"{current_text}\n{formatted_message}"
+            system_message.update_text(updated_text)
+        else:
+            # Create new system message in chat UI
+            system_message = ChatMessage(formatted_message, MessageSender.SYSTEM)
+            self.chat_layout.addWidget(system_message)
         
         # Save system message to chat history
         system_message_id = f"{id(message)}_{message_type}_system"
