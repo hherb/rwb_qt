@@ -377,16 +377,19 @@ class AudioAssistant(QMainWindow):
     
     def stop_processing(self) -> None:
         """Stop any ongoing audio processing."""
-        # Close audio output if active
-        if self.processor and hasattr(self.processor, 'output_stream') and self.processor.output_stream:
-            if self.processor.output_stream.is_active():
-                self.processor.output_stream.stop_stream()
+        # Cancel any ongoing processing tasks
+        if self.processor:
+            self.processor.cancel_processing()
             
         # Update UI state
         self.status_label.setText(STATUS_STOPPED)
         self.talk_button.setEnabled(True)
         self.stop_button.setVisible(False)
         self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
+        
+        # Reset cancellation flag for future tasks
+        if self.processor:
+            self.processor.reset_cancellation_flag()
     
     @Slot(str, str)
     def handle_text_update(self, message_id: str, text: str) -> None:

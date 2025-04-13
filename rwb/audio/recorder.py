@@ -39,14 +39,35 @@ class AudioRecorder:
             self.recording = True
             self.frames = []
             
-            # Open input stream
-            self.input_stream = self.audio.open(
-                format=self.FORMAT,
-                channels=self.CHANNELS,
-                rate=self.RATE,
-                input=True,
-                frames_per_buffer=self.CHUNK
-            )
+            try:
+                # Get default input device index
+                device_info = self.audio.get_default_input_device_info()
+                device_index = device_info['index']
+                
+                # Open input stream with explicit device index
+                self.input_stream = self.audio.open(
+                    format=self.FORMAT,
+                    channels=self.CHANNELS,
+                    rate=self.RATE,
+                    input=True,
+                    input_device_index=device_index,
+                    frames_per_buffer=self.CHUNK
+                )
+            except Exception as e:
+                print(f"Error opening audio input stream: {e}")
+                # Fall back to default device without explicit index
+                try:
+                    self.input_stream = self.audio.open(
+                        format=self.FORMAT,
+                        channels=self.CHANNELS,
+                        rate=self.RATE,
+                        input=True,
+                        frames_per_buffer=self.CHUNK
+                    )
+                except Exception as e:
+                    print(f"Failed to open audio input stream with fallback: {e}")
+                    self.recording = False
+                    return
             
             # Start recording timer
             self.record_timer = QTimer()

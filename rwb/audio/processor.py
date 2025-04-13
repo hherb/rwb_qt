@@ -8,9 +8,49 @@ This module provides the AudioProcessor class with separate methods for:
 import numpy as np
 import pyaudio
 import librosa
+import re
+import queue
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
-from PySide6.QtCore import QRunnable, QObject, Signal, Slot, QThreadPool
-from typing import Optional, Any, Iterator, List, Dict, Tuple
+from PySide6.QtCore import QRunnable, QObject, Signal, Slot, QThreadPool, QTimer
+from typing import Optional, Any, Iterator, List, Dict, Tuple, Deque
+from collections import deque
+
+
+def split_into_sentences(text: str) -> List[str]:
+    """Split text into individual sentences.
+    
+    Args:
+        text: The text to split into sentences
+        
+    Returns:
+        List[str]: A list of sentences
+        
+    Example:
+        >>> split_into_sentences("Hello! How are you? I'm fine.")
+        ['Hello!', 'How are you?', "I'm fine."]
+    """
+    # Use regex to split on sentence endings (.!?) followed by space or end of string
+    # This preserves the sentence ending punctuation
+    pattern = r'([.!?])\s*'
+    sentences = re.split(pattern, text)
+    
+    # Recombine the split sentences with their punctuation
+    result = []
+    for i in range(0, len(sentences) - 1, 2):
+        if i + 1 < len(sentences):
+            # Combine the sentence content with its ending punctuation
+            sentence = sentences[i] + sentences[i+1]
+            # Only add non-empty sentences
+            if sentence.strip():
+                result.append(sentence.strip())
+    
+    # Handle the last part if it doesn't end with punctuation
+    if len(sentences) % 2 == 1 and sentences[-1].strip():
+        result.append(sentences[-1].strip())
+        
+    return result
 
 
 class AudioProcessorSignals(QObject):
@@ -82,57 +122,207 @@ class AudioProcessor(QObject):
         self.audio = pyaudio.PyAudio()
         self.is_speaking = False
         self.output_stream = None
+        self.processing_cancelled = False
         
         # Thread pool for background processing
         self.threadpool = QThreadPool()
+        # Limit the number of concurrent tasks to prevent resource exhaustion
+        self.threadpool.setMaxThreadCount(min(4, self.threadpool.maxThreadCount()))
         print(f"Audio processor using maximum {self.threadpool.maxThreadCount()} threads")
         
-    def _tts_worker(self, text: str) -> None:
-        """Worker function to perform TTS in a separate thread.
+        # Thread-safe queue for TTS processing
+        self.tts_queue = queue.Queue()
+        self.tts_queue_lock = threading.RLock()
+        self.tts_queue_thread = None
+        self.tts_queue_running = False
+        
+        # Start the TTS queue processor thread
+        self._start_tts_queue_processor()
+        
+    def _start_tts_queue_processor(self):
+        """Start a background thread to process the TTS queue.
+        
+        This ensures that sentences are processed one at a time, preventing overlap.
+        """
+        self.tts_queue_running = True
+        self.tts_queue_thread = threading.Thread(
+            target=self._process_tts_queue,
+            daemon=True  # Make sure the thread doesn't block program exit
+        )
+        self.tts_queue_thread.start()
+    
+    def _process_tts_queue(self):
+        """Process TTS queue in a background thread.
+        
+        Continuously checks for new sentences to process and handles them sequentially.
+        """
+        while self.tts_queue_running:
+            try:
+                # Get the next text to process, with a timeout to allow for clean shutdown
+                try:
+                    text = self.tts_queue.get(timeout=0.5)
+                except queue.Empty:
+                    # No items in the queue, just continue the loop
+                    continue
+                
+                # Reset cancellation flag for new TTS processing
+                self.reset_cancellation_flag()
+                
+                # Signal that we're speaking
+                self.speaking.emit()
+                self.is_speaking = True
+                
+                # Process this text (synchronously in this thread)
+                self._process_tts_text_sync(text)
+                
+                # Signal that we're done with this item
+                self.is_speaking = False
+                self.done_speaking.emit()
+                
+                # Mark the queue item as done
+                self.tts_queue.task_done()
+                
+                # Small delay to ensure signals are processed
+                time.sleep(0.05)
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.error.emit(f"TTS queue processor error: {str(e)}")
+    
+    def _process_tts_text_sync(self, text):
+        """Process a single TTS text item synchronously.
         
         Args:
             text: The text to convert to speech
         """
+        if not text.strip():
+            return
+            
+        local_output_stream = None
+        
         try:
-            # Set up audio output stream if needed
-            if not self.output_stream or not self.output_stream.is_active():
-                self.output_stream = self.audio.open(
+            # Create a new audio stream for this TTS operation
+            try:
+                local_output_stream = self.audio.open(
                     format=pyaudio.paFloat32,
                     channels=1,
                     rate=44100,
                     output=True,
-                    frames_per_buffer=1024
+                    frames_per_buffer=2048
                 )
+            except Exception as e:
+                self.error.emit(f"Failed to open audio stream: {str(e)}")
+                return
             
             # Process the text for TTS
-            tts_stream = self.tts_model.stream_tts_sync(text.strip(), options=self.tts_options)
+            try:
+                tts_stream = self.tts_model.stream_tts_sync(text.strip(), options=self.tts_options)
+                
+                # Process each chunk of TTS audio
+                for tts_chunk in tts_stream:
+                    # Check for cancellation
+                    if self.processing_cancelled:
+                        break
+                    
+                    try:
+                        if isinstance(tts_chunk, tuple):
+                            if len(tts_chunk) > 0:
+                                sample_rate, audio_data = tts_chunk
+                                if isinstance(audio_data, np.ndarray):
+                                    # Ensure sample rate is valid
+                                    if sample_rate <= 0:
+                                        sample_rate = 24000
+                                    
+                                    # Create a copy to avoid memory issues
+                                    audio_data = np.copy(audio_data)
+                                    
+                                    if len(audio_data) > 0:
+                                        audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=44100)
+                                        audio_bytes = audio_data.tobytes()
+                                        
+                                        if self.processing_cancelled:
+                                            break
+                                        
+                                        if local_output_stream and local_output_stream.is_active():
+                                            local_output_stream.write(audio_bytes)
+                        
+                        elif isinstance(tts_chunk, np.ndarray):
+                            audio_data = np.copy(tts_chunk)
+                            
+                            if len(audio_data) > 0:
+                                audio_data = librosa.resample(audio_data, orig_sr=24000, target_sr=44100)
+                                audio_bytes = audio_data.tobytes()
+                                
+                                if self.processing_cancelled:
+                                    break
+                                
+                                if local_output_stream and local_output_stream.is_active():
+                                    local_output_stream.write(audio_bytes)
+                        
+                        elif isinstance(tts_chunk, bytes):
+                            audio_array = np.frombuffer(tts_chunk, dtype=np.float32)
+                            
+                            if len(audio_array) > 0:
+                                audio_array = librosa.resample(audio_array, orig_sr=24000, target_sr=44100)
+                                audio_bytes = audio_array.tobytes()
+                                
+                                if self.processing_cancelled:
+                                    break
+                                
+                                if local_output_stream and local_output_stream.is_active():
+                                    local_output_stream.write(audio_bytes)
+                    
+                    except Exception as chunk_error:
+                        print(f"Error processing audio chunk: {chunk_error}")
+                        continue
             
-            # Process each chunk of TTS audio
-            for tts_chunk in tts_stream:
-                if isinstance(tts_chunk, tuple):
-                    if len(tts_chunk) > 0:
-                        sample_rate, audio_data = tts_chunk
-                        if isinstance(audio_data, np.ndarray):
-                            # Resample from model's rate to PyAudio's rate
-                            audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=44100)
-                            audio_bytes = audio_data.tobytes()
-                            self.output_stream.write(audio_bytes)
-                else:
-                    if isinstance(tts_chunk, np.ndarray):
-                        audio_data = librosa.resample(tts_chunk, orig_sr=24000, target_sr=44100)
-                        audio_bytes = audio_data.tobytes()
-                        self.output_stream.write(audio_bytes)
-                    elif isinstance(tts_chunk, bytes):
-                        audio_array = np.frombuffer(tts_chunk, dtype=np.float32)
-                        audio_array = librosa.resample(audio_array, orig_sr=24000, target_sr=44100)
-                        audio_bytes = audio_array.tobytes()
-                        self.output_stream.write(audio_bytes)
+            except Exception as tts_error:
+                self.error.emit(f"TTS streaming error: {str(tts_error)}")
+        
         except Exception as e:
-            self.error.emit(f"TTS error: {str(e)}")
+            self.error.emit(f"TTS processing error: {str(e)}")
             import traceback
             traceback.print_exc()
         
-        return None
+        finally:
+            # Ensure audio stream is properly cleaned up
+            try:
+                if local_output_stream:
+                    if local_output_stream.is_active():
+                        local_output_stream.stop_stream()
+                    local_output_stream.close()
+            except Exception as cleanup_error:
+                print(f"Error closing audio stream: {cleanup_error}")
+    
+    def stop_tts_queue_processor(self):
+        """Stop the TTS queue processor thread safely."""
+        self.tts_queue_running = False
+        if self.tts_queue_thread and self.tts_queue_thread.is_alive():
+            self.tts_queue_thread.join(timeout=1.0)
+    
+    def reset_cancellation_flag(self):
+        """Reset the processing cancellation flag."""
+        self.processing_cancelled = False
+    
+    def cancel_processing(self):
+        """Cancel any ongoing processing."""
+        self.processing_cancelled = True
+    
+    def disconnect_signals(self) -> None:
+        """Disconnect all signals safely to prevent memory leaks.
+        
+        This should be called before destroying the object.
+        """
+        try:
+            # Disconnect all signals
+            self.speaking.disconnect()
+            self.done_speaking.disconnect()
+            self.stt_completed.disconnect()
+            self.error.disconnect()
+        except (RuntimeError, TypeError):
+            # Signals were not connected or error occurred
+            pass
     
     def tts(self, text: str) -> None:
         """Convert text to speech and play it in a separate thread.
@@ -143,63 +333,9 @@ class AudioProcessor(QObject):
         if not text.strip():
             return
             
-        self.speaking.emit()
-        self.is_speaking = True
-        
-        # Create a worker to process TTS in a separate thread
-        worker = AudioProcessorWorker(self._tts_worker, text)
-        
-        # Connect signals
-        worker.signals.finished.connect(self._on_tts_finished)
-        worker.signals.error.connect(self._on_tts_error)
-        
-        # Execute the worker
-        self.threadpool.start(worker)
-    
-    def _on_tts_finished(self) -> None:
-        """Handle completion of TTS processing."""
-        self.is_speaking = False
-        self.done_speaking.emit()
-    
-    def _on_tts_error(self, error: str) -> None:
-        """Handle TTS processing error.
-        
-        Args:
-            error: The error message
-        """
-        self.error.emit(f"TTS error: {error}")
-        self.is_speaking = False
-        self.done_speaking.emit()
-    
-    def _stt_worker(self, audio_data: np.ndarray, sample_rate: int) -> str:
-        """Worker function to perform STT in a separate thread.
-        
-        Args:
-            audio_data: The audio data to process
-            sample_rate: The sample rate of the audio
-            
-        Returns:
-            str: The transcribed text
-        """
-        try:
-            # Convert audio data to the format expected by the STT model
-            if isinstance(audio_data, np.ndarray):
-                # If it's already a numpy array, ensure it's in the right shape
-                if len(audio_data.shape) == 1:
-                    audio_data = audio_data.reshape(1, -1)
-            else:
-                # Convert bytes to numpy array
-                audio_data = np.frombuffer(audio_data, dtype=np.float32)
-                audio_data = audio_data.reshape(1, -1)
-            
-            # Convert to text
-            text = self.stt_model.stt((sample_rate, audio_data))
-            return text
-            
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            raise e
+        # Instead of directly processing, add the text to our queue
+        # The queue processor thread will handle it sequentially
+        self.tts_queue.put(text.strip())
     
     def process_audio_to_text(self, audio_data: np.ndarray, sample_rate: int) -> None:
         """Convert audio data to text using the STT model in a separate thread.
@@ -218,12 +354,51 @@ class AudioProcessor(QObject):
         # Execute the worker
         self.threadpool.start(worker)
     
+    def _stt_worker(self, audio_data: np.ndarray, sample_rate: int) -> str:
+        """Worker function to perform STT in a separate thread.
+        
+        Args:
+            audio_data: The audio data to process
+            sample_rate: The sample rate of the audio
+            
+        Returns:
+            str: The transcribed text
+        """
+        try:
+            # Check if processing was cancelled before starting
+            if self.processing_cancelled:
+                return ""
+                
+            # Convert audio data to the format expected by the STT model
+            if isinstance(audio_data, np.ndarray):
+                # If it's already a numpy array, ensure it's in the right shape
+                if len(audio_data.shape) == 1:
+                    audio_data = audio_data.reshape(1, -1)
+            else:
+                # Convert bytes to numpy array
+                audio_data = np.frombuffer(audio_data, dtype=np.float32)
+                audio_data = audio_data.reshape(1, -1)
+            
+            # Check again before heavy processing
+            if self.processing_cancelled:
+                return ""
+                
+            # Convert to text
+            text = self.stt_model.stt((sample_rate, audio_data))
+            return text
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e
+    
     def _on_stt_result(self, text: str) -> None:
-        """Handle STT result.
+        """Handle the result of STT processing.
         
         Args:
             text: The transcribed text
         """
+        # Emit the completed STT text
         self.stt_completed.emit(text)
     
     def _on_stt_error(self, error: str) -> None:
@@ -233,12 +408,5 @@ class AudioProcessor(QObject):
             error: The error message
         """
         self.error.emit(f"STT error: {error}")
-    
-    def close(self) -> None:
-        """Close audio resources."""
-        if self.output_stream and self.output_stream.is_active():
-            self.output_stream.stop_stream()
-            self.output_stream.close()
-        
-        if self.audio:
-            self.audio.terminate()
+        # Emit empty text to prevent waiting forever
+        self.stt_completed.emit("")

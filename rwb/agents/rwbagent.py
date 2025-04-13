@@ -13,7 +13,11 @@ import json
 from pprint import pprint
 from dotenv import load_dotenv
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QMutex, QThreadPool
+
+# Import the sentence splitter at module level
+from rwb.audio.processor import split_into_sentences
+from rwb.agents.worker import InputProcessorWorker
 
 from agno.agent import Agent
 from agno.models.ollama import Ollama
@@ -43,6 +47,7 @@ class RWBAgent(QObject):
     # Define signals
     feedback = Signal(str, str)  # Signal for feedback messages (message, message_type)
     text_update = Signal(str, str)  # Signal for text updates (message_id, text)
+    processing_complete = Signal()  # Signal for when processing is complete
     
     def __init__(self, model_name: str = MODEL):
         """Initialize the agent.
@@ -97,35 +102,21 @@ class RWBAgent(QObject):
         # Start processing the user input
         self._send_feedback(f"Processing query: {input_text[:30]}...", "debug")
         
-        # Stream responses
-        assistant_text = ""
-        current_sentence = ""
+        # Initialize the accumulated response text
+        self.assistant_text = ""
         
-        for chunk in self.astream(input_text):
-            assistant_text += chunk
-            current_sentence += chunk
-            
-            # Emit streaming text update for UI
-            self.text_update.emit(f"{self.current_message_id}_assistant", assistant_text)
-            
-            # Check if we have a complete sentence for TTS
-            sentence_end = False
-            for end in ('.', '!', '?'):
-                if end in current_sentence:
-                    # Check if the end is followed by a space or is at the end of the text
-                    pos = current_sentence.rfind(end)
-                    if pos == len(current_sentence) - 1 or current_sentence[pos + 1] == ' ':
-                        sentence_end = True
-                        break
-                    
-            # Process complete sentence for TTS
-            if sentence_end and current_sentence.strip() and self.audio_processor:
-                self.audio_processor.tts(current_sentence.strip())
-                current_sentence = ""
+        # Create worker to process input in a separate thread
+        self.input_worker = InputProcessorWorker(self.astream, input_text)
         
-        # Process any remaining text
-        if current_sentence.strip() and self.audio_processor:
-            self.audio_processor.tts(current_sentence.strip())
+        # Connect signals for handling responses
+        self.input_worker.signals.chunk.connect(self._on_chunk_received)
+        self.input_worker.signals.sentence_ready.connect(self._process_sentence)
+        self.input_worker.signals.error.connect(lambda error: self._send_feedback(f"Error: {error}", "error"))
+        self.input_worker.signals.finished.connect(self._on_processing_finished)
+        
+        # Start the worker
+        QThreadPool.globalInstance().start(self.input_worker)
+        
     
     def process_audio_input(self, audio_data: Any, sample_rate: int) -> None:
         """Process audio input from user.
@@ -141,13 +132,11 @@ class RWBAgent(QObject):
         # Store audio data reference for later use when STT completes
         self.current_audio_data = audio_data
         
-        # Connect to the STT completed signal if not already connected
-        try:
-            self.audio_processor.stt_completed.disconnect(self._on_stt_completed)
-        except RuntimeError:
-            # Signal was not connected
-            pass
-            
+        # In PySide6, it's better to use a simpler approach for 
+        # handling signal connections - just disconnect all and reconnect
+        # This avoids issues with the RuntimeWarning
+        self.audio_processor.stt_completed.disconnect()  # Disconnect all slots
+        
         # Connect to receive the result when ready
         self.audio_processor.stt_completed.connect(self._on_stt_completed)
             
@@ -338,6 +327,38 @@ class RWBAgent(QObject):
         self.feedback.emit(message, message_type)
         # Also print to console for debugging
         print(f"[{message_type.upper()}] {message}")
+    
+    def _on_chunk_received(self, chunk: str) -> None:
+        """Handle receiving a chunk of the response.
+        
+        Args:
+            chunk: A chunk of the response text
+        """
+        if not self.current_message_id:
+            return
+            
+        # Add the chunk to the accumulated text
+        self.assistant_text += chunk
+        
+        # Update the UI with the accumulated text
+        self.text_update.emit(self.current_message_id, self.assistant_text)
+    
+    def _on_processing_finished(self) -> None:
+        """Handle completion of input processing."""
+        self.processing_complete.emit()
+    
+    def _process_sentence(self, sentence: str) -> None:
+        """Process a complete sentence for TTS.
+        
+        Args:
+            sentence: A complete sentence to process
+        """
+        if not self.audio_processor or not sentence.strip():
+            return
+            
+        # Use the audio processor to convert text to speech
+        self.audio_processor.tts(sentence.strip())
+        
 
 
 if __name__ == "__main__":
