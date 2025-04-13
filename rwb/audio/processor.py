@@ -1,208 +1,244 @@
 """Audio processing module.
 
-This module handles the audio processing pipeline including:
-- Speech-to-text conversion
-- Text generation
-- Text-to-speech synthesis
+This module provides the AudioProcessor class with separate methods for:
+- Text-to-speech synthesis (TTS)
+- Speech-to-text conversion (STT)
 """
 
 import numpy as np
 import pyaudio
 import librosa
 from concurrent.futures import ThreadPoolExecutor
-from PySide6.QtCore import QThread, Signal, Slot
-from typing import Optional, Any, Tuple
-from rwb.agents.rwbagent import RWBAgent  # Updated import path
+from PySide6.QtCore import QRunnable, QObject, Signal, Slot, QThreadPool
+from typing import Optional, Any, Iterator, List, Dict, Tuple
 
 
-class AudioProcessor(QThread):
-    """Thread for processing audio asynchronously.
+class AudioProcessorSignals(QObject):
+    """Signals for the audio processor worker."""
+    started = Signal()
+    finished = Signal()
+    error = Signal(str)
+    result = Signal(object)
+
+
+class AudioProcessorWorker(QRunnable):
+    """Worker for running audio processing tasks in a separate thread."""
     
-    This class handles the processing of audio data in a separate thread,
-    including speech-to-text conversion, text generation, and text-to-speech
-    synthesis.
+    def __init__(self, fn, *args, **kwargs):
+        """Initialize the worker.
+        
+        Args:
+            fn: Function to run in the thread
+            *args: Arguments for the function
+            **kwargs: Keyword arguments for the function
+        """
+        super().__init__()
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = AudioProcessorSignals()
+        
+    @Slot()
+    def run(self):
+        """Run the worker function in a separate thread."""
+        try:
+            self.signals.started.emit()
+            result = self.fn(*self.args, **self.kwargs)
+            self.signals.result.emit(result)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.signals.error.emit(str(e))
+        finally:
+            self.signals.finished.emit()
+
+
+class AudioProcessor(QObject):
+    """Handles audio processing with separate methods for TTS and STT."""
     
-    Signals:
-        finished (Signal[str, str]): Emitted when processing is complete
-            with user_text and assistant_text
-        error (Signal[str]): Emitted when an error occurs
-        speaking (Signal): Emitted when speaking starts
-        done_speaking (Signal): Emitted when speaking ends
-        text_update (Signal[str, str]): Emitted when new text is available
-            (message_id, text)
-        feedback (Signal[str, str]): Emitted for system feedback messages
-            (message, message_type)
-    """
-    
-    finished = Signal(str, str)  # Signal for when processing is complete (user_text, assistant_text)
-    error = Signal(str)  # Signal for errors
     speaking = Signal()  # Signal for when speaking starts
     done_speaking = Signal()  # Signal for when speaking ends
-    text_update = Signal(str, str)  # Signal for text updates (message_id, text)
-    feedback = Signal(str, str)  # Signal for feedback messages (message, message_type)
+    stt_completed = Signal(str)  # Signal emitted when STT is complete
+    error = Signal(str)  # Signal for errors
     
     def __init__(
         self,
-        audio_data: Optional[np.ndarray],
-        sample_rate: int,
         stt_model: Any,
         tts_model: Any,
-        tts_options: Any,
-        agent: Optional[RWBAgent] = None  # Add agent parameter
+        tts_options: Any = None
     ):
         """Initialize the audio processor.
         
         Args:
-            audio_data: The audio data to process, or None for text input
-            sample_rate: The sample rate of the audio
             stt_model: The speech-to-text model
             tts_model: The text-to-speech model
-            tts_options: Options for text-to-speech synthesis
-            agent: RWBAgent for LLM inference (optional)
+            tts_options: Options for text-to-speech synthesis (optional)
         """
         super().__init__()
-        self.audio_data = audio_data
-        self.sample_rate = sample_rate
         self.stt_model = stt_model
         self.tts_model = tts_model
         self.tts_options = tts_options
-        self.agent = agent or RWBAgent()  # Use provided agent or create a default one
         
-        # Connect agent feedback signals to our feedback signal
-        self.agent.feedback.connect(self.handle_agent_feedback)
-        
-        self.executor = ThreadPoolExecutor(max_workers=2)
         self.audio = pyaudio.PyAudio()
-        self.direct_text: Optional[str] = None
-        self.current_message_id: Optional[str] = None
+        self.is_speaking = False
+        self.output_stream = None
         
-    def start(self, direct_text: Optional[str] = None) -> None:
-        """Start the processor with optional direct text input.
+        # Thread pool for background processing
+        self.threadpool = QThreadPool()
+        print(f"Audio processor using maximum {self.threadpool.maxThreadCount()} threads")
+        
+    def _tts_worker(self, text: str) -> None:
+        """Worker function to perform TTS in a separate thread.
         
         Args:
-            direct_text: Optional text input to process directly
-        """
-        self.direct_text = direct_text
-        self.current_message_id = str(id(self))  # Generate a unique ID for this message
-        super().start()
-        
-    def run(self) -> None:
-        """Process the audio data or direct text input.
-        
-        This method runs in a separate thread and handles:
-        1. Converting audio to text (if audio provided) or using direct text
-        2. Generating a response
-        3. Converting the response to speech
-        4. Playing the speech
+            text: The text to convert to speech
         """
         try:
-            # Get user text from audio or direct input
-            if self.direct_text is not None:
-                user_text = self.direct_text
-                # Skip emitting text update for direct text input as the UI already shows it
-                # This prevents duplication of user messages
-            else:
-                # Convert audio data to the format expected by the STT model
-                if isinstance(self.audio_data, np.ndarray):
-                    # If it's already a numpy array, ensure it's in the right shape
-                    if len(self.audio_data.shape) == 1:
-                        audio_data = self.audio_data.reshape(1, -1)
-                    else:
-                        audio_data = self.audio_data
+            # Set up audio output stream if needed
+            if not self.output_stream or not self.output_stream.is_active():
+                self.output_stream = self.audio.open(
+                    format=pyaudio.paFloat32,
+                    channels=1,
+                    rate=44100,
+                    output=True,
+                    frames_per_buffer=1024
+                )
+            
+            # Process the text for TTS
+            tts_stream = self.tts_model.stream_tts_sync(text.strip(), options=self.tts_options)
+            
+            # Process each chunk of TTS audio
+            for tts_chunk in tts_stream:
+                if isinstance(tts_chunk, tuple):
+                    if len(tts_chunk) > 0:
+                        sample_rate, audio_data = tts_chunk
+                        if isinstance(audio_data, np.ndarray):
+                            # Resample from model's rate to PyAudio's rate
+                            audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=44100)
+                            audio_bytes = audio_data.tobytes()
+                            self.output_stream.write(audio_bytes)
                 else:
-                    # Convert bytes to numpy array
-                    audio_data = np.frombuffer(self.audio_data, dtype=np.float32)
-                    audio_data = audio_data.reshape(1, -1)
-                
-                # Convert to text
-                user_text = self.stt_model.stt((self.sample_rate, audio_data))
-                
-                # Only emit text update for speech input, not for direct text
-                self.text_update.emit(f"{self.current_message_id}_user", user_text)
-            
-            # Get LLM response with streaming
-            assistant_text = ""
-            current_sentence = ""
-            output_stream = self.audio.open(
-                format=pyaudio.paFloat32,
-                channels=1,
-                rate=44100,
-                output=True,
-                frames_per_buffer=1024
-            )
-            
-            try:
-                # Use the agent to stream responses
-                for chunk in self.agent.astream(user_text):
-                    assistant_text += chunk
-                    current_sentence += chunk
-                    
-                    # Emit streaming text update
-                    self.text_update.emit(f"{self.current_message_id}_assistant", assistant_text)
-                    
-                    # Check if we have a complete sentence
-                    # Look for sentence boundaries that are followed by a space or end of text
-                    sentence_end = False
-                    for end in ('.', '!', '?'):
-                        if end in current_sentence:
-                            # Check if the end is followed by a space or is at the end of the text
-                            pos = current_sentence.rfind(end)
-                            if pos == len(current_sentence) - 1 or current_sentence[pos + 1] == ' ':
-                                sentence_end = True
-                                break
-                        
-                    # Also consider the end of the response as a sentence boundary
-                    if sentence_end  and current_sentence.strip():
-                        # Process the current sentence for TTS
-                        if current_sentence.strip():  # Only process if we have actual content
-                            tts_stream = self.tts_model.stream_tts_sync(current_sentence.strip(), options=self.tts_options)
-                            
-                            # Process each chunk of TTS audio
-                            for tts_chunk in tts_stream:
-                                if isinstance(tts_chunk, tuple):
-                                    if len(tts_chunk) > 0:
-                                        sample_rate, audio_data = tts_chunk
-                                        if isinstance(audio_data, np.ndarray):
-                                            # Resample from Kokoro's rate to PyAudio's rate
-                                            audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=44100)
-                                            audio_bytes = audio_data.tobytes()
-                                            output_stream.write(audio_bytes)
-                                else:
-                                    if isinstance(tts_chunk, np.ndarray):
-                                        audio_data = librosa.resample(tts_chunk, orig_sr=24000, target_sr=44100)
-                                        audio_bytes = audio_data.tobytes()
-                                        output_stream.write(audio_bytes)
-                                    elif isinstance(tts_chunk, bytes):
-                                        audio_array = np.frombuffer(tts_chunk, dtype=np.float32)
-                                        audio_array = librosa.resample(audio_array, orig_sr=24000, target_sr=44100)
-                                        audio_bytes = audio_array.tobytes()
-                                        output_stream.write(audio_bytes)
-                            
-                            # Reset current sentence
-                            current_sentence = ""
-                
-                # Emit the final results
-                self.finished.emit(user_text, assistant_text)
-                
-            finally:
-                output_stream.stop_stream()
-                output_stream.close()
-                self.done_speaking.emit()
-                
+                    if isinstance(tts_chunk, np.ndarray):
+                        audio_data = librosa.resample(tts_chunk, orig_sr=24000, target_sr=44100)
+                        audio_bytes = audio_data.tobytes()
+                        self.output_stream.write(audio_bytes)
+                    elif isinstance(tts_chunk, bytes):
+                        audio_array = np.frombuffer(tts_chunk, dtype=np.float32)
+                        audio_array = librosa.resample(audio_array, orig_sr=24000, target_sr=44100)
+                        audio_bytes = audio_array.tobytes()
+                        self.output_stream.write(audio_bytes)
         except Exception as e:
-            self.error.emit(str(e))
+            self.error.emit(f"TTS error: {str(e)}")
             import traceback
             traceback.print_exc()
-        finally:
-            self.audio.terminate()
-            
+        
+        return None
     
-    def handle_agent_feedback(self, message: str, message_type: str) -> None:
-        """Forward agent feedback to our feedback signal.
+    def tts(self, text: str) -> None:
+        """Convert text to speech and play it in a separate thread.
         
         Args:
-            message: The message text
-            message_type: Type of message (info, debug, error)
+            text: The text to convert to speech
         """
-        # Forward the feedback message to our own signal
-        self.feedback.emit(message, message_type)
+        if not text.strip():
+            return
+            
+        self.speaking.emit()
+        self.is_speaking = True
+        
+        # Create a worker to process TTS in a separate thread
+        worker = AudioProcessorWorker(self._tts_worker, text)
+        
+        # Connect signals
+        worker.signals.finished.connect(self._on_tts_finished)
+        worker.signals.error.connect(self._on_tts_error)
+        
+        # Execute the worker
+        self.threadpool.start(worker)
+    
+    def _on_tts_finished(self) -> None:
+        """Handle completion of TTS processing."""
+        self.is_speaking = False
+        self.done_speaking.emit()
+    
+    def _on_tts_error(self, error: str) -> None:
+        """Handle TTS processing error.
+        
+        Args:
+            error: The error message
+        """
+        self.error.emit(f"TTS error: {error}")
+        self.is_speaking = False
+        self.done_speaking.emit()
+    
+    def _stt_worker(self, audio_data: np.ndarray, sample_rate: int) -> str:
+        """Worker function to perform STT in a separate thread.
+        
+        Args:
+            audio_data: The audio data to process
+            sample_rate: The sample rate of the audio
+            
+        Returns:
+            str: The transcribed text
+        """
+        try:
+            # Convert audio data to the format expected by the STT model
+            if isinstance(audio_data, np.ndarray):
+                # If it's already a numpy array, ensure it's in the right shape
+                if len(audio_data.shape) == 1:
+                    audio_data = audio_data.reshape(1, -1)
+            else:
+                # Convert bytes to numpy array
+                audio_data = np.frombuffer(audio_data, dtype=np.float32)
+                audio_data = audio_data.reshape(1, -1)
+            
+            # Convert to text
+            text = self.stt_model.stt((sample_rate, audio_data))
+            return text
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e
+    
+    def process_audio_to_text(self, audio_data: np.ndarray, sample_rate: int) -> None:
+        """Convert audio data to text using the STT model in a separate thread.
+        
+        Args:
+            audio_data: The audio data to process
+            sample_rate: The sample rate of the audio
+        """
+        # Create a worker to process STT in a separate thread
+        worker = AudioProcessorWorker(self._stt_worker, audio_data, sample_rate)
+        
+        # Connect signals
+        worker.signals.result.connect(self._on_stt_result)
+        worker.signals.error.connect(self._on_stt_error)
+        
+        # Execute the worker
+        self.threadpool.start(worker)
+    
+    def _on_stt_result(self, text: str) -> None:
+        """Handle STT result.
+        
+        Args:
+            text: The transcribed text
+        """
+        self.stt_completed.emit(text)
+    
+    def _on_stt_error(self, error: str) -> None:
+        """Handle STT processing error.
+        
+        Args:
+            error: The error message
+        """
+        self.error.emit(f"STT error: {error}")
+    
+    def close(self) -> None:
+        """Close audio resources."""
+        if self.output_stream and self.output_stream.is_active():
+            self.output_stream.stop_stream()
+            self.output_stream.close()
+        
+        if self.audio:
+            self.audio.terminate()

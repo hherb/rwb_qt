@@ -42,6 +42,7 @@ class RWBAgent(QObject):
     
     # Define signals
     feedback = Signal(str, str)  # Signal for feedback messages (message, message_type)
+    text_update = Signal(str, str)  # Signal for text updates (message_id, text)
     
     def __init__(self, model_name: str = MODEL):
         """Initialize the agent.
@@ -51,6 +52,8 @@ class RWBAgent(QObject):
         """
         super().__init__()
         self.model_name = model_name
+        self.audio_processor = None  # Will be set later
+        self.current_message_id = None
         
         # Send feedback message
         self._send_feedback(f"Initializing RWBAgent with model: {self.model_name}", "info")
@@ -74,6 +77,101 @@ class RWBAgent(QObject):
             show_tool_calls=True,
             markdown=True,
         )
+    
+    def set_audio_processor(self, processor) -> None:
+        """Set the audio processor.
+        
+        Args:
+            processor: The AudioProcessor instance
+        """
+        self.audio_processor = processor
+    
+    def process_user_input(self, input_text: str) -> None:
+        """Process text input from user and generate a response.
+        
+        Args:
+            input_text: The text input from the user
+        """
+        self.current_message_id = str(id(input_text))  # Generate a unique ID for this message
+        
+        # Start processing the user input
+        self._send_feedback(f"Processing query: {input_text[:30]}...", "debug")
+        
+        # Stream responses
+        assistant_text = ""
+        current_sentence = ""
+        
+        for chunk in self.astream(input_text):
+            assistant_text += chunk
+            current_sentence += chunk
+            
+            # Emit streaming text update for UI
+            self.text_update.emit(f"{self.current_message_id}_assistant", assistant_text)
+            
+            # Check if we have a complete sentence for TTS
+            sentence_end = False
+            for end in ('.', '!', '?'):
+                if end in current_sentence:
+                    # Check if the end is followed by a space or is at the end of the text
+                    pos = current_sentence.rfind(end)
+                    if pos == len(current_sentence) - 1 or current_sentence[pos + 1] == ' ':
+                        sentence_end = True
+                        break
+                    
+            # Process complete sentence for TTS
+            if sentence_end and current_sentence.strip() and self.audio_processor:
+                self.audio_processor.tts(current_sentence.strip())
+                current_sentence = ""
+        
+        # Process any remaining text
+        if current_sentence.strip() and self.audio_processor:
+            self.audio_processor.tts(current_sentence.strip())
+    
+    def process_audio_input(self, audio_data: Any, sample_rate: int) -> None:
+        """Process audio input from user.
+        
+        Args:
+            audio_data: The audio data to process
+            sample_rate: The sample rate of the audio
+        """
+        if not self.audio_processor:
+            self._send_feedback("Audio processor not set", "error")
+            return
+        
+        # Store audio data reference for later use when STT completes
+        self.current_audio_data = audio_data
+        
+        # Connect to the STT completed signal if not already connected
+        try:
+            self.audio_processor.stt_completed.disconnect(self._on_stt_completed)
+        except RuntimeError:
+            # Signal was not connected
+            pass
+            
+        # Connect to receive the result when ready
+        self.audio_processor.stt_completed.connect(self._on_stt_completed)
+            
+        # Use audio processor to convert speech to text (runs asynchronously)
+        self.audio_processor.process_audio_to_text(audio_data, sample_rate)
+    
+    def _on_stt_completed(self, text: str) -> None:
+        """Handle completion of speech-to-text conversion.
+        
+        Args:
+            text: The transcribed text
+        """
+        if not text:
+            self._send_feedback("Failed to transcribe speech", "error")
+            return
+            
+        # Generate a unique ID for this message
+        self.current_message_id = str(id(text))
+        
+        # Emit the user's text for UI
+        self.text_update.emit(f"{self.current_message_id}_user", text)
+        
+        # Process the text input
+        self.process_user_input(text)
 
     def get_citations(self, chunk: Any) -> List[Dict[str, str]]:
         """Extract citations from the chunk content.

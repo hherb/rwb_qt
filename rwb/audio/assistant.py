@@ -78,13 +78,29 @@ class AudioAssistant(QMainWindow):
             lang="en-us"
         )
         
-        self.processor: Optional[AudioProcessor] = None
+        # Initialize audio processor 
+        self.processor = AudioProcessor(
+            stt_model=self.stt_model,
+            tts_model=self.tts_model,
+            tts_options=self.tts_options
+        )
+        
+        # Connect audio processor signals
+        self.processor.speaking.connect(self.handle_speaking_started)
+        self.processor.done_speaking.connect(self.handle_speaking_ended)
+        self.processor.stt_completed.connect(self.handle_stt_completed)
+        self.processor.error.connect(self.handle_processing_error)
+        
+        # Connect agent with audio processor
+        self.agent.set_audio_processor(self.processor)
+        
+        # Connect agent signals to UI
+        self.agent.feedback.connect(self.handle_feedback)
+        self.agent.text_update.connect(self.handle_text_update)
+        
         self.current_messages: Dict[str, ChatMessage] = {}
         self.current_message_id: str = ""  # Current session message ID
         self.attached_files: list[str] = []  # List to store attached file paths
-        
-        # Create the tabbed interface
-        self.setup_tabbed_ui()
     
     def setup_tabbed_ui(self) -> None:
         """Set up the tabbed user interface."""
@@ -356,37 +372,21 @@ class AudioAssistant(QMainWindow):
             # Create a unique message ID for this session
             self.current_message_id = str(id(self)) + "_" + str(id(audio_data))
             
-            # Start the audio processor thread
-            self.processor = AudioProcessor(
-                audio_data=audio_data,
-                sample_rate=self.recorder.RATE,
-                stt_model=self.stt_model,
-                tts_model=self.tts_model,
-                tts_options=self.tts_options,
-                agent=self.agent  # Pass the agent instance with feedback callback
-            )
-            
-            # Connect signals
-            self.processor.finished.connect(self.handle_processing_finished)
-            self.processor.error.connect(self.handle_processing_error)
-            self.processor.speaking.connect(self.handle_speaking_started)
-            self.processor.done_speaking.connect(self.handle_speaking_ended)
-            self.processor.text_update.connect(self.handle_text_update)
-            self.processor.feedback.connect(self.handle_feedback)
-            
-            # Start the processor
-            self.processor.start()
+            # Process audio directly with the agent
+            self.agent.process_audio_input(audio_data, self.recorder.RATE)
     
     def stop_processing(self) -> None:
         """Stop any ongoing audio processing."""
-        if self.processor and self.processor.isRunning():
-            self.processor.terminate()
-            self.processor.wait()
-            self.processor = None
-            self.status_label.setText(STATUS_STOPPED)
-            self.talk_button.setEnabled(True)
-            self.stop_button.setVisible(False)
-            self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
+        # Close audio output if active
+        if self.processor and hasattr(self.processor, 'output_stream') and self.processor.output_stream:
+            if self.processor.output_stream.is_active():
+                self.processor.output_stream.stop_stream()
+            
+        # Update UI state
+        self.status_label.setText(STATUS_STOPPED)
+        self.talk_button.setEnabled(True)
+        self.stop_button.setVisible(False)
+        self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
     
     @Slot(str, str)
     def handle_text_update(self, message_id: str, text: str) -> None:
@@ -553,24 +553,6 @@ class AudioAssistant(QMainWindow):
             # Create a unique message ID for this session
             self.current_message_id = str(id(self))
             
-            # Start the audio processor with the text
-            self.processor = AudioProcessor(
-                audio_data=None,
-                sample_rate=self.recorder.RATE,
-                stt_model=self.stt_model,
-                tts_model=self.tts_model,
-                tts_options=self.tts_options,
-                agent=self.agent  # Pass the agent instance
-            )
-            
-            # Connect signals
-            self.processor.finished.connect(self.handle_processing_finished)
-            self.processor.error.connect(self.handle_processing_error)
-            self.processor.speaking.connect(self.handle_speaking_started)
-            self.processor.done_speaking.connect(self.handle_speaking_ended)
-            self.processor.text_update.connect(self.handle_text_update)
-            self.processor.feedback.connect(self.handle_feedback)
-            
             # Manually add user message to display and chat history
             user_message_id = f"{self.current_message_id}_user"
             user_sender = MessageSender.USER
@@ -589,8 +571,8 @@ class AudioAssistant(QMainWindow):
                 # Clear the list after processing
                 self.attached_files = []
             
-            # Start the processor with text input
-            self.processor.start(text)
+            # Process text input with the agent
+            self.agent.process_user_input(text)
             
             # Update UI state
             self.talk_button.setEnabled(False)
@@ -601,9 +583,10 @@ class AudioAssistant(QMainWindow):
         """Handle window close event."""
         if self.recorder.recording:
             self.recorder.stop_recording()
-        if self.processor and self.processor.isRunning():
-            self.processor.terminate()
-            self.processor.wait()
+        
+        # Clean up audio processor resources
+        if self.processor:
+            self.processor.close()
         
         # Save chat history before closing
         self.chat_history.save()
@@ -667,3 +650,14 @@ class AudioAssistant(QMainWindow):
                 except AttributeError:
                     # If the agent doesn't have this method, just log it
                     print(f"Note: Agent doesn't support changing model name to {model_name}")
+    
+    @Slot(str)
+    def handle_stt_completed(self, text: str) -> None:
+        """Handle completion of speech-to-text conversion.
+        
+        Args:
+            text: The transcribed text
+        """
+        # Don't do anything here as the agent's process_audio_input method
+        # already handles adding the text to the UI
+        pass
