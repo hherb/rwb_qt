@@ -1,9 +1,16 @@
-# Voice Assistant
+# Researcher's Worbench - now with QT based UI with real time Voice Assistant
+** work in progress, functionality only partially implemented yet; a lot of functionality still needs to be ported from my old web UI based RWB project
 
+A biomedical sciences focussed agentic research interface resembling a chatbot, but
+- all inference including text-to-speech & speech-to-text generation happening locally
+- agents have long term memory and are able of searching the web, services such as pubmed, and local databases
+- agents can compose a reasobnable draft of a scientific publication with human-in-the-loop research and composition process
 A voice assistant application that uses speech-to-text, text-to-speech, and natural language processing to enable voice-based interactions.
 
 ## Features
 
+- Crafting and optimising database queries (eg pubmed) from natural language questions
+- keeping track of references and data sources long term, with retrieval by natural language questioning (variety of RAG techniques)
 - Real-time speech-to-text conversion
 - Natural language processing using Ollama
 - High-quality text-to-speech synthesis
@@ -12,9 +19,13 @@ A voice assistant application that uses speech-to-text, text-to-speech, and natu
 
 ## Requirements
 
+- a reasonably powerful computer with sufficient and fast enough memory (a mac >= M1 processor with at least 24GB or a NVIDIA GPU with at least 16GB RAM will do)
 - Python 3.12 or later
 - PortAudio (for PyAudio)
 - Ollama server running locally
+- FastRTC library
+- Agno library
+- PostgresSQL server with pgvector extension
 
 ## Installation
 
