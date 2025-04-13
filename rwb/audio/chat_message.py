@@ -124,12 +124,12 @@ class ChatMessage(QFrame):
                 color: #ffffff;
             }
             a {
-                color: #2196F3;  /* Bright blue for better contrast */
+                color: #00BFFF;  /* Much brighter blue (DeepSkyBlue) for better contrast */
                 text-decoration: underline;
                 font-weight: bold;
             }
             a:hover {
-                color: #64B5F6;  /* Lighter blue on hover */
+                color: #00FFFF;  /* Cyan on hover - even brighter */
                 text-decoration: underline;
             }
             code {
@@ -197,19 +197,19 @@ class ChatMessage(QFrame):
         
         # Calculate margins and padding
         margins = self.text_edit.contentsMargins()
-        padding = 20  # Increased padding for better text display
+        padding = 8  # Reduced padding for more compact display
         
         # Ensure minimum height for short messages
-        min_text_height = self.text_edit.fontMetrics().height() * 2  # At least 2 lines of text height
+        min_text_height = self.text_edit.fontMetrics().height() * 1.5  # Reduced from 2 lines to 1.5
         
         # Set the text edit height - ensure it's at least the minimum height
         text_height = max(min_text_height, doc_height) + margins.top() + margins.bottom() + padding
         self.text_edit.setFixedHeight(text_height)
         
-        # Update the frame's minimum height with reduced padding
+        # Update the frame's minimum height with minimal padding
         frame_margins = self.contentsMargins()
-        # Reduce the padding to a single line height
-        frame_padding = self.text_edit.fontMetrics().height()  
+        # Reduced padding to half a line height
+        frame_padding = self.text_edit.fontMetrics().height() * 0.5
         frame_height = text_height + frame_margins.top() + frame_margins.bottom() + frame_padding
         self.setMinimumHeight(frame_height)
         self.setMaximumHeight(frame_height)

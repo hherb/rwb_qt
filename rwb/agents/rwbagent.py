@@ -239,10 +239,11 @@ class RWBAgent(QObject):
                 pprint(chunk)
                 self._send_feedback(f"Error processing citations: {str(e)}", "error")
 
-        # If citations were found, format and send feedback
+        # If citations were found, format and append to message
         if citations:
             citationsstring = self.format_citations(citations)
-            self._send_feedback(citationsstring, "info")
+            # Instead of sending as feedback, append to current message
+            self._append_citations_to_message(citationsstring)
         return citations
 
 
@@ -313,8 +314,6 @@ class RWBAgent(QObject):
                     self._send_feedback(f"Using tool: {chunk.content}", "info")
                 case 'ToolCallCompleted':
                     self._send_feedback(f"Tool call completed: {chunk.content}", "info")
-                    #self.get_citations(chunk)
-
                 case 'UpdatingMemory':
                     self._send_feedback("Updating conversation memory...", "debug")
                 case 'FinalResponse':
@@ -366,12 +365,23 @@ class RWBAgent(QObject):
         # Add the chunk to the accumulated text
         self.assistant_text += chunk
         
-        # Update the UI with the accumulated text
-        self.text_update.emit(self.current_message_id, self.assistant_text)
+        # Update the UI with the accumulated text using assistant message ID
+        assistant_message_id = f"{self.current_message_id}_assistant"
+        self.text_update.emit(assistant_message_id, self.assistant_text)
     
     def _on_processing_finished(self) -> None:
         """Handle completion of input processing."""
+        # Emit signal to notify that processing is complete
         self.processing_complete.emit()
+        
+        # Also emit a signal to complete and save the assistant message
+        # This ensures the message gets transferred from pending_messages to current_chat
+        if hasattr(self, 'assistant_text') and self.current_message_id:
+            assistant_message_id = f"{self.current_message_id}_assistant"
+            # Re-emit the final text to ensure complete message is saved
+            self.text_update.emit(assistant_message_id, self.assistant_text)
+            # Send a special signal to mark completion
+            self.feedback.emit(f"Assistant message {assistant_message_id} completed", "complete_message")
     
     def _process_sentence(self, sentence: str) -> None:
         """Process a complete sentence for TTS.
@@ -384,7 +394,29 @@ class RWBAgent(QObject):
             
         # Use the audio processor to convert text to speech
         self.audio_processor.tts(sentence.strip())
+    
+    def _append_citations_to_message(self, citations_text: str) -> None:
+        """Append citations to the current assistant message.
         
+        Args:
+            citations_text: Formatted citation text to append
+        """
+        if not self.current_message_id:
+            self._send_feedback("No active message to append citations to", "error")
+            return
+            
+        # Append the citations to the current assistant text
+        if hasattr(self, 'assistant_text'):
+            # Append with a newline separator
+            self.assistant_text = f"{self.assistant_text}\n\n{citations_text}"
+            
+            # Update the UI with the new text that includes citations
+            # Use the correct assistant message ID format
+            assistant_message_id = f"{self.current_message_id}_assistant"
+            self.text_update.emit(assistant_message_id, self.assistant_text)
+        else:
+            # If there's no assistant_text attribute, log an error
+            self._send_feedback("Failed to append citations: No assistant text found", "error")
 
 
 if __name__ == "__main__":

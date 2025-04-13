@@ -420,14 +420,21 @@ class AudioAssistant(QMainWindow):
             self.chat_layout.addWidget(message)
             self.current_messages[message_id] = message
             
-            # Add user messages to chat history immediately (they're complete)
-            if is_user and text.strip():
+            # Add message to chat history
+            if text.strip():
                 self.chat_history.add_message(text, sender, message_id)
-                self.chat_history.complete_message(message_id)
-                self.chat_history.save()
+                # Only mark user messages as complete - assistant messages keep updating
+                if is_user:
+                    self.chat_history.complete_message(message_id)
+                    self.chat_history.save()
         else:
-            # Update existing message UI only, don't update chat history for assistant messages
+            # Update existing message UI
             self.current_messages[message_id].update_text(text)
+            
+            # Also update the assistant message in chat history
+            if message_id.endswith("_assistant") and text.strip():
+                self.chat_history.add_message(text, MessageSender.ASSISTANT, message_id)
+                # We'll complete and save assistant messages in _on_processing_finished
         
         # Scroll to bottom
         scroll_area = self.chat_container.parent().parent()
@@ -655,6 +662,23 @@ class AudioAssistant(QMainWindow):
             message: The message to display
             message_type: Type of message (info, debug, error)
         """
+        # Handle special message types
+        if message_type == "complete_message" and "Assistant message" in message and "_assistant" in message:
+            # This is our special signal to complete the assistant message
+            try:
+                # Extract the message ID from the message text
+                import re
+                match = re.search(r'Assistant message ([^_]+_assistant) completed', message)
+                if match:
+                    assistant_id = match.group(1)
+                    # Complete and save the message
+                    self.chat_history.complete_message(assistant_id)
+                    self.chat_history.save()
+                    print(f"[HISTORY] Completed and saved assistant message {assistant_id}")
+            except Exception as e:
+                print(f"Error completing assistant message: {str(e)}")
+            return
+            
         # Only display debug messages if we're in debug mode
         if message_type == "debug":
             # Skip debug messages in the UI for now
