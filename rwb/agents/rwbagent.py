@@ -208,22 +208,48 @@ class RWBAgent(QObject):
         # Only process if chunk has messages
         if not hasattr(chunk, 'messages') or not chunk.messages:
             return citations
-            
-        # Get only the last 'tool' message - traverse from last to first
-        last_tool_message = None
+        
+        # Find only tool messages that are part of the current run
+        # We need to identify the current run's messages
+        run_tool_messages = []
+        
+        # First, determine if this is a completed run with a final assistant message
+        has_assistant_response = False
         for message in reversed(chunk.messages):
-            if message.role == 'tool':
-                last_tool_message = message
+            if message.role == 'assistant':
+                has_assistant_response = True
                 break
                 
-        # Process only the last tool message if found
-        if last_tool_message:
+        # If we have an assistant response, collect tool messages that came after
+        # the previous assistant response (if any) and before the current one
+        if has_assistant_response:
+            collecting_tool_messages = False
+            found_current_assistant = False
+            
+            for message in reversed(chunk.messages):
+                # When we hit an assistant message, toggle our collector state
+                if message.role == 'assistant':
+                    if found_current_assistant:
+                        # We've reached the previous assistant message, stop collecting
+                        break
+                    else:
+                        # We've found the current assistant message (from reverse order)
+                        found_current_assistant = True
+                        collecting_tool_messages = True
+                        continue
+                
+                # Collect tool messages between the last assistant message and current one
+                if collecting_tool_messages and message.role == 'tool':
+                    run_tool_messages.insert(0, message)  # Insert at beginning to maintain order
+        
+        # Process the tool messages for this run
+        for tool_message in run_tool_messages:
             try:
                 # Parse JSON content - check if content is already a list or needs parsing
-                if isinstance(last_tool_message.content, list):
-                    msglist = last_tool_message.content
+                if isinstance(tool_message.content, list):
+                    msglist = tool_message.content
                 else:
-                    msglist = json.loads(last_tool_message.content)
+                    msglist = json.loads(tool_message.content)
                 
                 # Add each citation for web search
                 for msg in msglist:
@@ -233,10 +259,10 @@ class RWBAgent(QObject):
                     
             except json.JSONDecodeError:
                 self._send_feedback("Error parsing tool message as JSON", "error")
-                pprint(chunk)
+                pprint(tool_message)
             except Exception as e:
                 print(f"Error processing citations: {str(e)}")
-                pprint(chunk)
+                pprint(tool_message)
                 self._send_feedback(f"Error processing citations: {str(e)}", "error")
 
         # If citations were found, format and append to message
