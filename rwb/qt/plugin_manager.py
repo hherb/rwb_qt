@@ -49,7 +49,7 @@ class QtPluginManager:
                     data = json.load(f)
                     if data.get('path') and os.path.exists(data['path']):
                         self.cached_path = data['path']
-                        print(f"Loaded cached Qt plugin path: {self.cached_path}")
+                        #print(f"Loaded cached Qt plugin path: {self.cached_path}")
         except Exception as e:
             print(f"Error loading plugin cache: {e}")
     
@@ -82,7 +82,7 @@ class QtPluginManager:
             # Simple verification: check if the cocoa plugin exists
             cocoa_plugin = os.path.join(path, "libqcocoa.dylib")
             if os.path.exists(cocoa_plugin):
-                print(f"Found cocoa plugin at: {cocoa_plugin}")
+                #print(f"Found cocoa plugin at: {cocoa_plugin}")
                 self.verified_paths.add(path)
                 return True
             else:
@@ -110,7 +110,6 @@ class QtPluginManager:
         # 1. Check cached path first
         if self.cached_path and os.path.exists(self.cached_path):
             paths.append(self.cached_path)
-            print(f"Added cached path: {self.cached_path}")
         
         # 2. Check virtual environment first (highest priority)
         if hasattr(sys, 'real_prefix') or hasattr(sys, 'base_prefix'):
@@ -125,7 +124,6 @@ class QtPluginManager:
             for path in possible_paths:
                 if os.path.exists(path):
                     paths.append(path)
-                    print(f"Added virtual environment path: {path}")
         
         # 3. Check PySide6 installation
         try:
@@ -145,7 +143,6 @@ class QtPluginManager:
                         for path in possible_paths:
                             if os.path.exists(path):
                                 paths.append(path)
-                                print(f"Added PySide6 installation path: {path}")
         except Exception as e:
             print(f"Error finding PySide6 location: {e}")
         
@@ -158,7 +155,6 @@ class QtPluginManager:
             for path in possible_paths:
                 if os.path.exists(path):
                     paths.append(path)
-                    print(f"Added system site-packages path: {path}")
         
         # 5. Check user's home directory
         home_paths = [
@@ -168,7 +164,6 @@ class QtPluginManager:
         for path in home_paths:
             if os.path.exists(path):
                 paths.append(path)
-                print(f"Added home directory path: {path}")
         
         # Remove duplicates while preserving order
         seen: Set[str] = set()
@@ -201,10 +196,7 @@ class QtPluginManager:
             print("No Qt plugin paths found!")
             return False
             
-        print("\nTrying Qt plugin paths in order of priority:")
         for path in paths:
-            print(f"\nAttempting path: {path}")
-            
             # Set the plugin path
             os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = path
             
@@ -216,10 +208,9 @@ class QtPluginManager:
                 if os.path.exists(qt_lib_path):
                     os.environ["DYLD_LIBRARY_PATH"] = qt_lib_path
                     os.environ["LD_LIBRARY_PATH"] = qt_lib_path
-                    print(f"Set Qt library path: {qt_lib_path}")
+                    #print(f"Set Qt library path: {qt_lib_path}")
             
             if self.verify_plugins(path):
-                print(f"Successfully verified Qt plugins at: {path}")
                 self.save_cache(path)
                 return True
         

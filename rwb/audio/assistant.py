@@ -47,12 +47,16 @@ class AudioAssistant(QMainWindow):
         super().__init__()
         self.setWindowTitle("Voice Assistant")
         self.setGeometry(100, 100, 1000, 700)
-
-        # Initialize the RWB agent for LLM inference
-        self.agent = RWBAgent()
         
         # Initialize chat history
         self.chat_history = ChatHistory()
+        
+        # Create UI components first (this will initialize self.chat_layout)
+        self.setup_tabbed_ui()
+        
+        # Initialize the RWB agent for LLM inference
+        # only after UI components are set up
+        self.agent = RWBAgent()
         
         # Initialize audio recorder
         self.recorder = AudioRecorder()
@@ -351,7 +355,8 @@ class AudioAssistant(QMainWindow):
                 sample_rate=self.recorder.RATE,
                 stt_model=self.stt_model,
                 tts_model=self.tts_model,
-                tts_options=self.tts_options
+                tts_options=self.tts_options,
+                agent=self.agent  # Pass the agent instance with feedback callback
             )
             
             # Connect signals
@@ -360,6 +365,7 @@ class AudioAssistant(QMainWindow):
             self.processor.speaking.connect(self.handle_speaking_started)
             self.processor.done_speaking.connect(self.handle_speaking_ended)
             self.processor.text_update.connect(self.handle_text_update)
+            self.processor.feedback.connect(self.handle_feedback)
             
             # Start the processor
             self.processor.start()
@@ -388,7 +394,6 @@ class AudioAssistant(QMainWindow):
             
             # Add user messages to chat history immediately (they're complete)
             if is_user and text.strip():
-                print(f"Adding user message to history: {text}")
                 self.chat_history.add_message(text, sender, message_id)
                 self.chat_history.complete_message(message_id)
                 self.chat_history.save()
@@ -425,16 +430,13 @@ class AudioAssistant(QMainWindow):
             
             # Only process if there's actual text
             if final_text.strip():
-                print(f"Adding assistant message to history: {final_text[:30]}...")
                 # Add the original markdown text to chat history
                 self.chat_history.add_message(final_text, MessageSender.ASSISTANT, assistant_id)
                 self.chat_history.complete_message(assistant_id)
                 self.chat_history.save()
-                print(f"Saved chat history to {self.chat_history.current_session_filename}")
         else:
             # If assistant message wasn't found, create it directly
             if assistant_text.strip():
-                print("Directly adding assistant message to history (message not found in UI)")
                 self.chat_history.add_message(assistant_text, MessageSender.ASSISTANT, assistant_id)
                 self.chat_history.complete_message(assistant_id)
                 self.chat_history.save()
@@ -512,6 +514,7 @@ class AudioAssistant(QMainWindow):
         
         # TODO: Add functionality to actually process these files when sending a message 
 
+
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         """Filter events for text input to handle key presses.
         
@@ -559,6 +562,7 @@ class AudioAssistant(QMainWindow):
             self.processor.speaking.connect(self.handle_speaking_started)
             self.processor.done_speaking.connect(self.handle_speaking_ended)
             self.processor.text_update.connect(self.handle_text_update)
+            self.processor.feedback.connect(self.handle_feedback)
             
             # Manually add user message to display and chat history
             user_message_id = f"{self.current_message_id}_user"
@@ -599,4 +603,36 @@ class AudioAssistant(QMainWindow):
         
         # Clean up audio resources
         self.recorder.cleanup()
-        event.accept() 
+        event.accept()
+    
+    @Slot(str, str)
+    def handle_feedback(self, message: str, message_type: str) -> None:
+        """Handle feedback messages from the agent or processor.
+        
+        Args:
+            message: The message to display
+            message_type: Type of message (info, debug, error)
+        """
+        # Only display debug messages if we're in debug mode
+        if message_type == "debug":
+            # Skip debug messages in the UI for now
+            # Could add a setting to enable/disable debug messages
+            return
+        
+        # Format the message based on type
+        if message_type == "error":
+            formatted_message = f"⚠️ {message}"
+        elif message_type == "info":
+            formatted_message = f"ℹ️ {message}"
+        else:
+            formatted_message = message
+        
+        # Create system message in chat UI
+        system_message = ChatMessage(formatted_message, MessageSender.SYSTEM)
+        self.chat_layout.addWidget(system_message)
+        
+        # Scroll to show the message
+        scroll_area = self.chat_container.parent().parent()
+        scroll_area.verticalScrollBar().setValue(
+            scroll_area.verticalScrollBar().maximum()
+        )

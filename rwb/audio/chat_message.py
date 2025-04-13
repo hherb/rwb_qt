@@ -76,11 +76,8 @@ class ChatMessage(QFrame):
             # Go up from audio to rwb folder, then find icons subfolder
             icons_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icons')
             icon_path = os.path.join(icons_dir, style['icon'])
-            
-            print(f"Looking for icon at: {icon_path}")
-            
+            # Check if the icon file exists            
             if os.path.exists(icon_path):
-                print(f"Icon found: {icon_path}")
                 pixmap = QPixmap(icon_path)
                 # Scale the image to fit while maintaining aspect ratio
                 pixmap = pixmap.scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation)

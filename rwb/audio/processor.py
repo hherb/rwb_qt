@@ -30,6 +30,8 @@ class AudioProcessor(QThread):
         done_speaking (Signal): Emitted when speaking ends
         text_update (Signal[str, str]): Emitted when new text is available
             (message_id, text)
+        feedback (Signal[str, str]): Emitted for system feedback messages
+            (message, message_type)
     """
     
     finished = Signal(str, str)  # Signal for when processing is complete (user_text, assistant_text)
@@ -37,6 +39,7 @@ class AudioProcessor(QThread):
     speaking = Signal()  # Signal for when speaking starts
     done_speaking = Signal()  # Signal for when speaking ends
     text_update = Signal(str, str)  # Signal for text updates (message_id, text)
+    feedback = Signal(str, str)  # Signal for feedback messages (message, message_type)
     
     def __init__(
         self,
@@ -64,6 +67,10 @@ class AudioProcessor(QThread):
         self.tts_model = tts_model
         self.tts_options = tts_options
         self.agent = agent or RWBAgent()  # Use provided agent or create a default one
+        
+        # Connect agent feedback signals to our feedback signal
+        self.agent.feedback.connect(self.handle_agent_feedback)
+        
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.audio = pyaudio.PyAudio()
         self.direct_text: Optional[str] = None
@@ -187,4 +194,15 @@ class AudioProcessor(QThread):
             import traceback
             traceback.print_exc()
         finally:
-            self.audio.terminate() 
+            self.audio.terminate()
+            
+    
+    def handle_agent_feedback(self, message: str, message_type: str) -> None:
+        """Forward agent feedback to our feedback signal.
+        
+        Args:
+            message: The message text
+            message_type: Type of message (info, debug, error)
+        """
+        # Forward the feedback message to our own signal
+        self.feedback.emit(message, message_type)
