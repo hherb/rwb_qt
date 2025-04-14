@@ -354,15 +354,59 @@ class AudioProcessor(QObject):
     def tts(self, text: str) -> None:
         """Convert text to speech and play it in a separate thread.
         
+        Pre-processes text to remove URLs and Markdown/HTML formatting.
+        
         Args:
             text: The text to convert to speech
         """
-        if not text.strip():
+        if not text or not text.strip():
             return
             
-        # Instead of directly processing, add the text to our queue
+        processed_text = text.strip()
+        
+        print(f"sanitising te for speaking ...")
+        # Replace URLs with ", link provided."
+        # Handles http://, https://, and www. links
+        processed_text = re.sub(r'(https?://\\S+|www\\.\\S+)', ', link provided.', processed_text)
+        
+        # Strip HTML tags
+        processed_text = re.sub(r'<[^>]+>', '', processed_text)
+        
+        # Basic Markdown removal 
+        # Remove bold/italics markers (*, _)
+        processed_text = re.sub(r'(\\*\\*|__)(.*?)\\1', r'\\2', processed_text) # Bold
+        processed_text = re.sub(r'(\\*|_)(.*?)\\1', r'\\2', processed_text)     # Italics
+        # Remove inline code markers (`)
+        processed_text = re.sub(r'`([^`]+)`', r'\\1', processed_text)
+        # Remove strikethrough (~~)
+        processed_text = re.sub(r'~~(.*?)~~', r'\\1', processed_text)
+        # Remove headers (#)
+        processed_text = re.sub(r'^#+\s+', '', processed_text, flags=re.MULTILINE)
+        # Remove Markdown links/images markers: [text](url) or ![alt](url)
+        # Corrected regex for links (final fix for escaping)
+        processed_text = re.sub(r'\[([^\]]+)\]\(([^)]*)\)', r'\1', processed_text) # Keep link text
+        # Corrected regex for images (final fix for escaping)
+        processed_text = re.sub(r'!\[([^\]]*)\]\(([^)]*)\)', r'\1', processed_text) # Keep alt text (or empty if none)
+        # Remove list markers (*, -, + followed by space) at the beginning of lines
+        processed_text = re.sub(r'^\s*[-*+]\s+', '', processed_text, flags=re.MULTILINE)
+        # Remove blockquotes (>)
+        processed_text = re.sub(r'^>\\s*', '', processed_text, flags=re.MULTILINE)
+        
+        # Remove potential double spacing and leading/trailing whitespace introduced by replacements
+        #processed_text = re.sub(r'\\s+', ' ', processed_text).strip()
+        # Replace multiple ", link provided." instances with a single one
+        processed_text = re.sub(r'(, link provided\\.)(\\s*, link provided\\.)+', r'\\1', processed_text)
+        # Clean up spaces around the link placeholder
+        #processed_text = re.sub(r'\\s+, link provided\\.', ', link provided.', processed_text)
+
+
+        if not processed_text:
+            # If all text was removed (e.g., just a URL), don't queue anything
+            return
+
+        # Instead of directly processing, add the processed text to our queue
         # The queue processor thread will handle it sequentially
-        self.tts_queue.put(text.strip())
+        self.tts_queue.put(processed_text)
     
     def process_audio_to_text(self, audio_data: np.ndarray, sample_rate: int) -> None:
         """Convert audio data to text using the STT model in a separate thread.

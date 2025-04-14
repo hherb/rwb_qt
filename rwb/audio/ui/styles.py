@@ -24,6 +24,9 @@ COLOR_GRAY_MEDIUM = "#2d2d2d"   # Dark gray - component backgrounds
 COLOR_GRAY_LIGHT = "#cccccc"    # Light gray - text color
 COLOR_HIGHLIGHT = "#4CAF50"     # Green highlight for selected items
 COLOR_HOVER = "#333333"         # Hover color for interactive elements
+COLOR_BABY_BLUE = "#2196F3"      # Blue for send button
+COLOR_GRAY_VERY_LIGHT = "#f0f0f0"  # Very light gray for tooltips
+COLOR_GRAY_LIGHTER = "#f5f5f5"  # Light gray for buttons and backgrounds
 
 # Global tooltip style
 TOOLTIP_STYLE = """

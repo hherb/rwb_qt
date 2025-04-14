@@ -285,29 +285,79 @@ class RWBAgent(QObject):
         """
         from typing import Union
         
-        citationstr = "### References:<br>"
-        for n, citation in enumerate(citations):
+        citationstr = "<div class='references'>\n<h3>References</h3>\n<ol>"
+        
+        for citation in citations:
             if isinstance(citation, dict):
                 # Handle dictionary format with title and href
                 citation_type = citation.get('format', 'unknown')
+                
                 if citation_type == 'pubmed':
+                    # Format PubMed citations in academic style
                     pmid = citation.get('pmid', None)
-                    urlstr="""https://pubmed.ncbi.nlm.nih.gov"""
+                    url = "https://pubmed.ncbi.nlm.nih.gov"
                     if pmid:
-                        urlstr = f"""{urlstr}/{pmid}/"""
-                    citationstr += f"""- [{n+1}. PMID: {citation.get('pmid', 'N/A')} {citation.get('title', 'no title')}]({urlstr}) <br><small><i>Athors: {citation.get('authors', 'authors unknow')[:50]}...</i></small><br><br>"""
+                        url = f"{url}/{pmid}/"
+                    
+                    authors = citation.get('authors', 'Unknown Authors')
+                    if len(authors) > 50:
+                        authors = f"{authors[:50]}..."
+                    
+                    pub_date = citation.get('publication_date', 'N/A')
+                    title = citation.get('title', 'No title')
+                    journal = citation.get('journal', '')
+                    doi = citation.get('doi', '')
+                    
+                    citationstr += f"\n  <li>\n    <div class='citation academic'>\n"
+                    citationstr += f"      <p>{authors} ({pub_date}). <a href='{url}'><strong>{title}</strong></a>."
+                    
+                    if journal:
+                        citationstr += f" <em>{journal}</em>."
+                    
+                    if doi:
+                        citationstr += f" DOI: {doi}"
+                    
+                    citationstr += "</p>\n    </div>\n  </li>"
+                
                 elif citation_type == 'websearch':
-                    # Handle web search format
-                    citationstr += f"{n+1}. [{citation.get('title', 'N/A')}]({citation.get('href', 'no URL')}) <small><i>({citation.get('href', 'no URL')})</i></small><br>"
+                    # Format web citations in a clean style
+                    title = citation.get('title', 'N/A')
+                    url = citation.get('href', '#')
+                    
+                    citationstr += f"\n  <li>\n    <div class='citation web'>\n"
+                    citationstr += f"      <p><a href='{url}'>{title}</a></p>\n"
+                    citationstr += f"      <p class='url'>{url}</p>\n"
+                    citationstr += "    </div>\n  </li>"
+                
                 else:
-                    # Handle unknown format
-                    citationstr += f"{n+1}. {str(citation)}<br>"
+                    # Handle unknown dictionary format
+                    citationstr += f"\n  <li>\n    <div class='citation unknown'>\n"
+                    citationstr += f"      <p>{str(citation)}</p>\n"
+                    citationstr += "    </div>\n  </li>"
+            
             elif isinstance(citation, str):
-                # Handle string format (treat the string as both title and URL)
-                citationstr += f"{n+1}. [{citation}]({citation}) <small><i>({citation})</i></small><br>"
+                # Handle string format (treat as URL)
+                citationstr += f"\n  <li>\n    <div class='citation url-only'>\n"
+                citationstr += f"      <p><a href='{citation}'>{citation}</a></p>\n"
+                citationstr += "    </div>\n  </li>"
+            
             else:
                 # Handle unexpected format
-                citationstr += f"{n+1}. Unknown reference format<br>"
+                citationstr += f"\n  <li>\n    <div class='citation fallback'>\n"
+                citationstr += "      <p>Unknown reference format</p>\n"
+                citationstr += "    </div>\n  </li>"
+        
+        citationstr += "\n</ol>\n</div>\n\n<style>\n"
+        citationstr += ".references { margin-top: 30px; border-top: 1px solid #e0e0e0; padding-top: 20px; }\n"
+        citationstr += ".references h3 { font-size: 1.3rem; margin-bottom: 15px; }\n"
+        citationstr += ".references ol { padding-left: 20px; }\n"
+        citationstr += ".citation { margin-bottom: 12px; }\n"
+        citationstr += ".citation a { color: inherit; text-decoration: underline; }\n"
+        citationstr += ".citation a:hover { opacity: 0.8; }\n"
+        citationstr += ".citation.academic p { line-height: 1.5; }\n"
+        citationstr += ".citation.web .url { font-size: 0.85rem; color: #888; margin-top: 3px; }\n"
+        citationstr += "</style>"
+        
         return citationstr
     
                                 

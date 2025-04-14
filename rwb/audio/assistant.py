@@ -687,6 +687,9 @@ class AudioAssistant(QMainWindow):
             
         # Format the message based on type
         from datetime import datetime
+        from PySide6.QtWidgets import QLabel
+        from PySide6.QtCore import Qt
+        
         timestamp = datetime.now().strftime("%H:%M:%S")
         
         if message_type == "error":
@@ -698,23 +701,21 @@ class AudioAssistant(QMainWindow):
             
         formatted_message = f"[{timestamp}] {prefix} {message}"
         
-        # Check if there's already a system message widget
-        system_message = None
-        for i in range(self.chat_layout.count()):
-            widget = self.chat_layout.itemAt(i).widget()
-            if isinstance(widget, ChatMessage) and widget.sender == MessageSender.SYSTEM:
-                system_message = widget
-                break
-                
-        if system_message:
-            # Update existing system message with new content
-            current_text = system_message.text_edit.toPlainText()
-            updated_text = f"{current_text}\n{formatted_message}"
-            system_message.update_text(updated_text)
-        else:
-            # Create new system message in chat UI
-            system_message = ChatMessage(formatted_message, MessageSender.SYSTEM)
-            self.chat_layout.addWidget(system_message)
+        # Create a simple text label for system messages
+        system_label = QLabel(formatted_message)
+        system_label.setWordWrap(True)
+        system_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        system_label.setStyleSheet("""
+            QLabel {
+                color: #aaaaaa;
+                font-size: 12px;
+                padding: 2px 10px;
+                margin: 2px 5px;
+            }
+        """)
+        
+        # Add the label to the chat layout
+        self.chat_layout.addWidget(system_label)
         
         # Save system message to chat history
         system_message_id = f"{id(message)}_{message_type}_system"

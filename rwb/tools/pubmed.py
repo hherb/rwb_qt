@@ -160,7 +160,8 @@ class PubMedTools(Toolkit):
         return response.response.strip('```json').strip('```') 
         
     
-
+    #It actually returns a json.dumps(List[Dict]) string, but we will keep the name for compatibility
+    #This is necessary to make it work as a tool for agno agents
     def search_pubmed(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
         """Searches PubMed with the given query and returns a list of results.
 
@@ -322,11 +323,13 @@ class PubMedTools(Toolkit):
             # return [{"error": str(e)}]
             return '[]' # Return empty JSON array string on error
         
-        
+    #It actually returns a json.dumps(List[Dict]) string, but we will keep the name for compatibility
+    #This is necessary to make it work as a tool for agno agents    
     def NL_pubmed_search(self, human_language: str, max_results=10, email=None) -> List[Dict[str, Any]]:
         """Searches PubMed using a natural language query and returns results.
         This tool coverts the natural language query into a PubMed query first
         and then performs the search.
+        If this tool returns 
 
         Args:
             human_language (str): The natural language query.
