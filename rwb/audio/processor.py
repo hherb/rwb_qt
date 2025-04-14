@@ -364,40 +364,41 @@ class AudioProcessor(QObject):
             
         processed_text = text.strip()
         
-        print(f"sanitising te for speaking ...")
+        #print(f"sanitising text for speaking ...")
         # Replace URLs with ", link provided."
-        # Handles http://, https://, and www. links
-        processed_text = re.sub(r'(https?://\\S+|www\\.\\S+)', ', link provided.', processed_text)
+        # Handles http://, https://, and www. links - fixed to properly handle domain names
+        processed_text = re.sub(r'(https?://\S+|www\.\S+)', ' link provided ', processed_text)
         
         # Strip HTML tags
         processed_text = re.sub(r'<[^>]+>', '', processed_text)
         
         # Basic Markdown removal 
         # Remove bold/italics markers (*, _)
-        processed_text = re.sub(r'(\\*\\*|__)(.*?)\\1', r'\\2', processed_text) # Bold
-        processed_text = re.sub(r'(\\*|_)(.*?)\\1', r'\\2', processed_text)     # Italics
+        processed_text = re.sub(r'(\*\*|__)(.*?)\1', r'\2', processed_text) # Bold
+        processed_text = re.sub(r'(\*|_)(.*?)\1', r'\2', processed_text)     # Italics
         # Remove inline code markers (`)
-        processed_text = re.sub(r'`([^`]+)`', r'\\1', processed_text)
+        processed_text = re.sub(r'`([^`]+)`', r'\1', processed_text)
         # Remove strikethrough (~~)
-        processed_text = re.sub(r'~~(.*?)~~', r'\\1', processed_text)
+        processed_text = re.sub(r'~~(.*?)~~', r'\1', processed_text)
         # Remove headers (#)
         processed_text = re.sub(r'^#+\s+', '', processed_text, flags=re.MULTILINE)
         # Remove Markdown links/images markers: [text](url) or ![alt](url)
-        # Corrected regex for links (final fix for escaping)
         processed_text = re.sub(r'\[([^\]]+)\]\(([^)]*)\)', r'\1', processed_text) # Keep link text
-        # Corrected regex for images (final fix for escaping)
         processed_text = re.sub(r'!\[([^\]]*)\]\(([^)]*)\)', r'\1', processed_text) # Keep alt text (or empty if none)
         # Remove list markers (*, -, + followed by space) at the beginning of lines
         processed_text = re.sub(r'^\s*[-*+]\s+', '', processed_text, flags=re.MULTILINE)
         # Remove blockquotes (>)
-        processed_text = re.sub(r'^>\\s*', '', processed_text, flags=re.MULTILINE)
+        processed_text = re.sub(r'^>\s*', '', processed_text, flags=re.MULTILINE)
+        
+        # Add spaces between letters in acronyms (all-capital words up to 6 letters)
+        processed_text = re.sub(r'\b([A-Z]{2,6})\b', lambda m: ' '.join(list(m.group(1))), processed_text)
         
         # Remove potential double spacing and leading/trailing whitespace introduced by replacements
-        #processed_text = re.sub(r'\\s+', ' ', processed_text).strip()
-        # Replace multiple ", link provided." instances with a single one
-        processed_text = re.sub(r'(, link provided\\.)(\\s*, link provided\\.)+', r'\\1', processed_text)
+        processed_text = re.sub(r'\s+', ' ', processed_text).strip()
+        # Clean up multiple "link provided" instances
+        processed_text = re.sub(r'(link provided\s+)+', 'link provided ', processed_text)
         # Clean up spaces around the link placeholder
-        #processed_text = re.sub(r'\\s+, link provided\\.', ', link provided.', processed_text)
+        processed_text = re.sub(r'\s+link provided\s+', ' link provided ', processed_text)
 
 
         if not processed_text:
