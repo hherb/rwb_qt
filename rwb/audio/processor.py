@@ -378,8 +378,8 @@ class AudioProcessor(QObject):
         processed_text = re.sub(r'(\*|_)(.*?)\1', r'\2', processed_text)     # Italics
         # Remove inline code markers (`)
         processed_text = re.sub(r'`([^`]+)`', r'\1', processed_text)
-        # Remove strikethrough (~~)
-        processed_text = re.sub(r'~~(.*?)~~', r'\1', processed_text)
+        # Remove strikethrough (~~) - content should not be read
+        processed_text = re.sub(r'~~(.*?)~~', '', processed_text)
         # Remove headers (#)
         processed_text = re.sub(r'^#+\s+', '', processed_text, flags=re.MULTILINE)
         # Remove Markdown links/images markers: [text](url) or ![alt](url)
@@ -389,6 +389,10 @@ class AudioProcessor(QObject):
         processed_text = re.sub(r'^\s*[-*+]\s+', '', processed_text, flags=re.MULTILINE)
         # Remove blockquotes (>)
         processed_text = re.sub(r'^>\s*', '', processed_text, flags=re.MULTILINE)
+        # Remove HTML comments
+        processed_text = re.sub(r'<!--.*?-->', '', processed_text, flags=re.DOTALL)
+        # Remove content in <details> tags (commonly used to hide content)
+        processed_text = re.sub(r'<details>.*?</details>', '', processed_text, flags=re.DOTALL)
         
         # Add spaces between letters in acronyms (all-capital words up to 6 letters)
         processed_text = re.sub(r'\b([A-Z]{2,6})\b', lambda m: ' '.join(list(m.group(1))), processed_text)

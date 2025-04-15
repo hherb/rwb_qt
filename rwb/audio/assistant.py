@@ -6,7 +6,7 @@ handling user interaction, audio recording, and displaying the conversation.
 
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter, QHBoxLayout, QPushButton
-from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent, QSettings, QSize, QTimer
+from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent, QSettings, QSize, QTimer, QPoint
 from PySide6.QtGui import QIcon
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
@@ -52,7 +52,18 @@ class AudioAssistant(QMainWindow):
         """Initialize the AudioAssistant."""
         super().__init__()
         self.setWindowTitle("Voice Assistant")
-        self.setGeometry(100, 100, 1000, 700)
+        
+        # Initialize settings
+        self.settings = QSettings("RWB", "VoiceAssistant")
+        
+        # Set default window size and position if not found in settings
+        default_size = QSize(1000, 700)
+        size = self.settings.value("window/size", default_size)
+        pos = self.settings.value("window/pos", QPoint(100, 100))
+        
+        # Apply saved geometry
+        self.resize(size)
+        self.move(pos)
         
         # Set the dark theme for the entire window
         self.setStyleSheet("""
@@ -65,9 +76,6 @@ class AudioAssistant(QMainWindow):
                 border: none;
             }
         """)
-        
-        # Initialize settings
-        self.settings = QSettings("RWB", "VoiceAssistant")
         
         # Initialize chat history
         self.chat_history = ChatHistory()
@@ -264,9 +272,9 @@ class AudioAssistant(QMainWindow):
         history_layout.addWidget(self.history_status_label)
         
         # Create splitter for horizontal layout
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setChildrenCollapsible(False)  # Prevent collapsing sections completely
-        splitter.setStyleSheet(SPLITTER_STYLE)
+        self.history_splitter = QSplitter(Qt.Horizontal)
+        self.history_splitter.setChildrenCollapsible(False)  # Prevent collapsing sections completely
+        self.history_splitter.setStyleSheet(SPLITTER_STYLE)
         
         # Create history list widget (left side)
         self.history_list = HistoryList()
@@ -283,14 +291,18 @@ class AudioAssistant(QMainWindow):
         right_layout.addWidget(self.history_scroll)
         
         # Add widgets to splitter
-        splitter.addWidget(self.history_list)
-        splitter.addWidget(right_widget)
+        self.history_splitter.addWidget(self.history_list)
+        self.history_splitter.addWidget(right_widget)
         
-        # Set initial sizes (40% for list, 60% for chat display)
-        splitter.setSizes([400, 600])
+        # Restore splitter state from settings or set default sizes (40% for list, 60% for chat display)
+        saved_state = self.settings.value("ui/history_splitter")
+        if saved_state:
+            self.history_splitter.restoreState(saved_state)
+        else:
+            self.history_splitter.setSizes([400, 600])
         
         # Add splitter to main layout
-        history_layout.addWidget(splitter, 1)
+        history_layout.addWidget(self.history_splitter, 1)
     
     def on_tab_changed(self, index: int) -> None:
         """Handle tab change events.
@@ -650,6 +662,15 @@ class AudioAssistant(QMainWindow):
         # Save chat history before closing
         self.chat_history.save()
         
+        # Save window size and position
+        self.settings.setValue("window/size", self.size())
+        self.settings.setValue("window/pos", self.pos())
+        
+        # Save splitter position in history tab
+        if hasattr(self, 'history_tab'):
+            for splitter in self.history_tab.findChildren(QSplitter):
+                self.settings.setValue("ui/history_splitter", splitter.saveState())
+        
         # Clean up audio resources
         self.recorder.cleanup()
         event.accept()
@@ -734,7 +755,16 @@ class AudioAssistant(QMainWindow):
         dialog = SettingsDialog(self)
         if dialog.exec():
             # Reload settings that might have changed
-            self.tts_options.voice = self.settings.value("tts/voice", "bf_emma")
+            selected_voice = self.settings.value("tts/voice", "bf_emma")
+            
+            # Update the TTS voice in our options
+            self.tts_options.voice = selected_voice
+            print(f"Voice updated to: {selected_voice}")
+            
+            # We also need to update the voice in the processor's TTS options
+            if hasattr(self, 'processor'):
+                self.processor.tts_options.voice = selected_voice
+                self.handle_feedback(f"Voice changed to {selected_voice}", "info")
             
             # Update the model name if needed
             model_name = self.settings.value("model/name", "")
