@@ -83,9 +83,10 @@ class AudioAssistant(QMainWindow):
         # Create UI components first (this will initialize self.chat_layout)
         self.setup_tabbed_ui()
         
-        # Initialize the RWB agent for LLM inference
+        # Initialize the RWB agent for LLM inference with model from settings
         # only after UI components are set up
-        self.agent = RWBAgent()
+        model_name = self.settings.value("model/name", "qwen2.5:14b-instruct-q8_0")
+        self.agent = RWBAgent(model_name=model_name)
         
         # Initialize audio recorder
         self.recorder = AudioRecorder()

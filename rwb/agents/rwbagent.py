@@ -50,13 +50,15 @@ class RWBAgent(QObject):
     text_update = Signal(str, str)  # Signal for text updates (message_id, text)
     processing_complete = Signal()  # Signal for when processing is complete
     
-    def __init__(self, model_name: str = MODEL):
+    def __init__(self, model_name: str = None):
         """Initialize the agent.
         
         Args:
             model_name: Name of the LLM model to use
         """
         super().__init__()
+        if not model_name:
+            model_name = MODEL
         self.model_name = model_name
         self.audio_processor = None  # Will be set later
         self.current_message_id = None
@@ -410,12 +412,21 @@ class RWBAgent(QObject):
         return self.model_name
     
     def set_model_name(self, model_name: str) -> None:
-        """Set a new model name.
+        """Set a new model name and update the agent model.
         
         Args:
             model_name: Name of the LLM model to use
         """
-        self.model_name = model_name 
+        self.model_name = model_name
+        # Send feedback message about model change
+        self._send_feedback(f"Changing model to: {self.model_name}", "info")
+        
+        # Update the agent's model to use the new model name
+        try:
+            self.agent.model = Ollama(id=self.model_name)
+            self._send_feedback(f"Model successfully updated to: {self.model_name}", "info")
+        except Exception as e:
+            self._send_feedback(f"Error updating model: {str(e)}", "error")
     
     def _send_feedback(self, message: str, message_type: str = "info") -> None:
         """Send feedback messages via signal.
