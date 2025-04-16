@@ -468,13 +468,10 @@ class AudioProcessor(QObject):
         Args:
             muted: Whether TTS output should be muted
         """
-        print(f"Setting mute state to: {muted}")
         # Make sure we're getting a proper boolean value
         self.mute_enabled = bool(muted)
-        print(f"AudioProcessor.mute_enabled is now: {self.mute_enabled}")
         
         # If currently speaking and now muted, stop the voice output
         if self.mute_enabled and self.is_speaking:
-            print("Stopping voice output due to mute")
             self.clear_tts_queue()
             self.cancel_processing()

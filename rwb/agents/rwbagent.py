@@ -5,7 +5,7 @@ and streaming responses, separate from audio processing.
 """
 import os
 import pathlib
-from typing import Iterator, List, Dict, Any, Optional, Union
+from typing import Iterator, AsyncIterator, List, Dict, Any, Optional, Union
 import asyncio
 from textwrap import dedent
 from datetime import datetime
@@ -25,6 +25,7 @@ from rwb.agents.worker import InputProcessorWorker
 
 from agno.agent import Agent
 from agno.models.ollama import Ollama
+from PySide6.QtCore import QEvent, QCoreApplication
 from agno.tools.duckduckgo import DuckDuckGoTools
 #from agno.tools.pubmed import PubmedTools. #it sucks
 from rwb.tools.pubmed import PubMedTools
@@ -204,6 +205,57 @@ class RWBAgent(QObject):
         # Start the worker
         QThreadPool.globalInstance().start(self.input_worker)
         
+    async def process_user_input_async(self, input_text: str) -> None:
+        """Process text input from user asynchronously and generate a response.
+        
+        Args:
+            input_text: The text input from the user
+        """
+        # Ensure we preserve mute state that might have been set earlier
+        if hasattr(self, 'saved_mute_state') and self.audio_processor:
+            self.audio_processor.set_mute_state(self.saved_mute_state)
+        
+        self.current_message_id = str(id(input_text))  # Generate a unique ID for this message
+        
+        # Start processing the user input
+        self._send_feedback(f"Processing query asynchronously: {input_text[:30]}...", "debug")
+        
+        # Initialize the accumulated response text
+        self.assistant_text = ""
+        
+        try:
+            from rwb.audio.processor import split_into_sentences
+            
+            # Process asynchronously
+            async for chunk in await self.astream_async(input_text):
+                if chunk:
+                    # Update the accumulated text
+                    self.assistant_text += chunk
+                    
+                    # Update the UI with the accumulated text
+                    assistant_message_id = f"{self.current_message_id}_assistant"
+                    self.text_update.emit(assistant_message_id, self.assistant_text)
+                    
+                    # Process complete sentences for TTS if audio processor is available
+                    if self.audio_processor:
+                        # Split current text into sentences
+                        sentences = split_into_sentences(chunk)
+                        for sentence in sentences:
+                            if sentence.strip():
+                                # Process each complete sentence
+                                self._process_sentence(sentence.strip())
+                                
+                    # Allow the event loop to process other events
+                    await asyncio.sleep(0)
+                    
+            # Process is complete
+            self._on_processing_finished()
+            
+        except Exception as e:
+            error_msg = f"Error in async processing: {str(e)}"
+            self._send_feedback(error_msg, "error")
+            print(error_msg)
+        
     
     def process_audio_input(self, audio_data: Any, sample_rate: int) -> None:
         """Process audio input from user.
@@ -353,10 +405,14 @@ class RWBAgent(QObject):
                     
             except json.JSONDecodeError:
                 self._send_feedback("Error parsing tool message as JSON", "error")
+                print("<ERROR>")
                 pprint(tool_message)
+                print("</ERROR>")
             except Exception as e:
                 print(f"Error processing citations: {str(e)}")
+                print("<ERROR>")
                 pprint(tool_message)
+                print("</ERROR>")
                 self._send_feedback(f"Error processing citations: {str(e)}", "error")
 
         # If citations were found, format and append to message
@@ -492,6 +548,46 @@ class RWBAgent(QObject):
                     self._send_feedback("Response complete", "debug")
                 case _:    
                     self._send_feedback(f"Unknown event: {chunk.event}", "debug")
+                    
+    async def astream_async(self, prompt: str) -> AsyncIterator[str]:
+        """Asynchronously stream responses from the LLM with absolute minimal latency.
+        
+        Args:
+            prompt: The prompt to send to the LLM
+            
+        Yields:
+            str: Chunks of the LLM's response
+        """
+        # Debug message moved to process_user_input to avoid duplication
+        
+        stream = await self.agent.arun(prompt, 
+                                      stream=True,
+                                      stream_intermediate_steps=True,
+        )
+        async for chunk in stream:
+            match(chunk.event):
+                case 'RunCompleted':
+                    self._send_feedback("Response complete", "debug")
+                    self.get_citations(chunk)
+                case 'RunResponse':
+                    yield chunk.content
+                case 'RunStarted':
+                    pass
+                    #self._send_feedback("Starting to generate response...", "info")
+                case 'ToolCallStarted':
+                    self._send_feedback(f"Using tool: {chunk.content}", "info")
+                    if self.audio_processor:
+                        self.audio_processor.tts(random_choice(RESEARCHING_FEEDBACKS))
+                case 'ToolCallCompleted':
+                    self._send_feedback(f"Tool call completed: {chunk.content}", "info")
+                    if self.audio_processor:
+                        self.audio_processor.tts(random_choice(RESEARCH_COMPLETED_FEEDBACKS))
+                case 'UpdatingMemory':
+                    self._send_feedback("Updating conversation memory...", "debug")
+                case 'FinalResponse':
+                    self._send_feedback("Response complete", "debug")
+                case _:    
+                    self._send_feedback(f"Unknown event: {chunk.event}", "debug")
 
 
            
@@ -572,15 +668,10 @@ class RWBAgent(QObject):
         """
         if not self.audio_processor or not sentence.strip():
             return
-        
-        # Enhanced debug: Print current state before any changes
-        print(f"Before restore: Audio processor mute state = {getattr(self.audio_processor, 'mute_enabled', False)}")
-        print(f"Agent's saved mute state = {getattr(self, 'saved_mute_state', False)}")
-        
+            
         # CRITICAL FIX: Make sure we restore saved mute state before TTS processing
         # This ensures the mute checkbox setting is respected even after voice input
         if hasattr(self, 'saved_mute_state'):
-            print(f"Applying saved mute state: {self.saved_mute_state}")
             self.audio_processor.set_mute_state(self.saved_mute_state)
         
         # Force check mute state from AudioAssistant class if available
@@ -591,7 +682,6 @@ class RWBAgent(QObject):
             import gc
             for obj in gc.get_objects():
                 if isinstance(obj, AudioAssistant) and hasattr(obj, 'mute_tts'):
-                    print(f"Found AudioAssistant with mute_tts = {obj.mute_tts}")
                     self.saved_mute_state = obj.mute_tts
                     self.audio_processor.set_mute_state(obj.mute_tts)
                     break
@@ -599,7 +689,6 @@ class RWBAgent(QObject):
             print(f"Error finding AudioAssistant: {e}")
             
         # Final check of mute state before sending to TTS
-        print(f"Final mute check before TTS: {getattr(self.audio_processor, 'mute_enabled', False)}")
             
         # Use the audio processor to convert text to speech
         self.audio_processor.tts(sentence.strip())
@@ -629,9 +718,42 @@ class RWBAgent(QObject):
 
 
 if __name__ == "__main__":
+    # agent = RWBAgent()
+    # prompt = "What is happening in Germany today"
+    # for chunk in agent.astream(prompt):
+    #     # Print content if available
+    #     print(chunk, end="")
+    # print("\n--- End of Stream ---")
+
+    import time
+    import asyncio
+    
     agent = RWBAgent()
     prompt = "What is happening in Germany today"
-    for chunk in agent.astream(prompt):
-        # Print content if available
+    
+    # Test synchronous version
+    print("Testing synchronous streaming...")
+    start_time = time.time()
+    first_chunk_time = None
+    for i, chunk in enumerate(agent.astream(prompt)):
+        if i == 0:
+            first_chunk_time = time.time() - start_time
         print(chunk, end="")
-    print("\n--- End of Stream ---")
+    total_time = time.time() - start_time
+    print(f"\nSync method - First chunk: {first_chunk_time:.3f}s, Total: {total_time:.3f}s")
+    
+    # Test asynchronous version
+    print("\nTesting asynchronous streaming...")
+    async def test_async():
+        start_time = time.time()
+        first_chunk_time = None
+        i = 0
+        async for chunk in await agent.astream_async(prompt):
+            if i == 0:
+                first_chunk_time = time.time() - start_time
+                i += 1
+            print(chunk, end="")
+        total_time = time.time() - start_time
+        print(f"\nAsync method - First chunk: {first_chunk_time:.3f}s, Total: {total_time:.3f}s")
+    
+    asyncio.run(test_async())

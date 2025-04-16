@@ -10,10 +10,11 @@ from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent, QSettings
 from PySide6.QtGui import QIcon
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
+from time import sleep
 
 from rwb.agents.rwbagent import RWBAgent  # Updated import path
 from rwb.context import context_manager
-from rwb.helpers.texts import random_greeting
+from rwb.helpers.texts import random_greeting, random_shutdown
 
 
 from .processor import AudioProcessor
@@ -115,6 +116,7 @@ class AudioAssistant(QMainWindow):
         self.current_message_id: str = ""  # Current session message ID
         self.attached_files: list[str] = []  # List to store attached file paths
         self.mute_tts: bool = False  # Track whether TTS output should be muted
+        sleep(0.3)  # Give some time for the UI to initialize before starting TTS
         self.processor.tts(random_greeting(context_manager.user))
     
     def setup_tabbed_ui(self) -> None:
@@ -651,13 +653,23 @@ class AudioAssistant(QMainWindow):
             self.stop_button.setVisible(True)
             self.status_label.setText(STATUS_PROCESSING)
     
-    def closeEvent(self, event: Any) -> None:
-        """Handle window close event."""
+    def shutdown(self) -> None:
+        """Handle application shutdown tasks.
+        
+        This method performs all necessary cleanup tasks when the application is shutting down.
+        It can be called programmatically or will be automatically called when the window is closed.
+        """
+        print("AudioAssistant is shutting down...")
+        
+        # Stop any active recording
         if self.recorder.recording:
             self.recorder.stop_recording()
         
         # Clean up audio processor resources
         if self.processor:
+            self.processor.tts(random_shutdown(context_manager.user))
+            # Wait for a short time to allow TTS to finish
+            sleep(3)
             # Cancel any ongoing processing
             self.processor.cancel_processing()
             # Stop the TTS queue processor thread
@@ -681,6 +693,12 @@ class AudioAssistant(QMainWindow):
         
         # Clean up audio resources
         self.recorder.cleanup()
+        print("AudioAssistant shutdown complete")
+
+    def closeEvent(self, event: Any) -> None:
+        """Handle window close event."""
+        # Call the shutdown method to handle all cleanup tasks
+        self.shutdown()
         event.accept()
     
     @Slot(str, str)
