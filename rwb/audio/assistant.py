@@ -12,6 +12,9 @@ from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
 from typing import Optional, Any, Dict
 
 from rwb.agents.rwbagent import RWBAgent  # Updated import path
+from rwb.context import context_manager
+from rwb.helpers.texts import random_greeting
+
 
 from .processor import AudioProcessor
 from .chat_message import ChatMessage, MessageSender
@@ -112,6 +115,7 @@ class AudioAssistant(QMainWindow):
         self.current_message_id: str = ""  # Current session message ID
         self.attached_files: list[str] = []  # List to store attached file paths
         self.mute_tts: bool = False  # Track whether TTS output should be muted
+        self.processor.tts(random_greeting(context_manager.user))
     
     def setup_tabbed_ui(self) -> None:
         """Set up the tabbed user interface."""

@@ -3,6 +3,9 @@ import re
 
 tts_replacements = {
     "Dr.": "Doctor",
+    "Prof.": "Professor",
+    "Ms.": "Miss",
+    "Mrs.": "Misses",
     "Mr.": "Mister",
     "i.e.": "that is",
     "I.e.": "That is",
@@ -197,11 +200,30 @@ if __name__ == "__main__":
     ```
     The RACGP is a great organization but WHO is greater
     Dr. Smith is a great doctor. I.e. he is the best.
-    The URL for the Royal Australian College of General Practitioners (RACGP) is https://www.racgp.org.au/. "
+    The URL for the Royal Australian College of General Practitioners (RACGP) is https://www.racgp.org.au/. 
+    Here is a link to [Google](https://www.google.com).
+    Here is a link to [Google](https://www.google.com) and [Bing](https://www.bing.com).
+    Here is an image ![Image](http://example.com/image.png) and a link [Link](http://example.com).
+    Dr. Smith prescribes too many NSAIDs
+    Weather found at  [http://www.bom.gov.au/qld/forecasts/brisbane.shtml](http://www.bom.gov.au/qld/forecasts/brisbane.shtml)
     """
     
     print("Original text:")
     print(complex_md_text)
     print("Converted text:")
     print(markdown_to_speech(complex_md_text))  # Should handle all formatting and links
-    
+
+    #time how long it takes to do such conversion 1000 times
+    import time
+    start_time = time.time()
+    for _ in range(1000):
+        markdown_to_speech(complex_md_text)
+    end_time = time.time()
+    print(f"Time taken for 1000 conversions: {end_time - start_time:.2f} seconds")
+    # Check if the output is empty
+    assert markdown_to_speech(complex_md_text) != "", "Output is empty!"
+    # Check if the output is a string
+    assert isinstance(markdown_to_speech(complex_md_text), str), "Output is not a string!"
+
+    realtext = """"Here are some sources for the current weather conditions and forecasts in Brisbane:\n\n- [Brisbane Forecast - Bureau of Meteorology](http://www.bom.gov.au/qld/forecasts/brisbane.shtml)\n- [Brisbane, Queensland, Australia Weather Forecast | AccuWeather](https://www.accuweather.com/en/au/brisbane/24741/weather-forecast/24741)\n- [Weather Today for Brisbane City, Queensland, Australia | AccuWeather](https://www.accuweather.com/en/au/brisbane-cbd/1-13903_1_al/weather-today/1-13903_1_al)\n- [Brisbane Weather - Bureau of Meteorology](http://www.bom.gov.au/places/qld/brisbane/)\n- [Brisbane Weather Forecast, QLD 4000 - WillyWeather](https://www.willyweather.com.au/qld/brisbane/brisbane.html.)\n\nFor the most accurate and up-to-date information, you might want to visit the Bureau of Meteorology's Brisbane weather page which provides real-time data.\n\n<div class='references'>\n<h3>References</h3>\n<ol>\n  <li>\n    <div class='citation web'>\n      <p><a href='http://www.bom.gov.au/qld/forecasts/brisbane.shtml'>Brisbane Forecast - Bureau of Meteorology</a></p>\n      <p class='url'>http://www.bom.gov.au/qld/forecasts/brisbane.shtml</p>\n    </div>\n  </li>\n  <li>\n    <div class='citation web'>\n      <p><a href='https://www.accuweather.com/en/au/brisbane/24741/weather-forecast/24741'>Brisbane, Queensland, Australia Weather Forecast | AccuWeather</a></p>\n      <p class='url'>https://www.accuweather.com/en/au/brisbane/24741/weather-forecast/24741</p>\n    </div>\n  </li>\n  <li>\n    <div class='citation web'>\n      <p><a href='https://www.accuweather.com/en/au/brisbane-cbd/1-13903_1_al/weather-today/1-13903_1_al'>Weather Today for Brisbane City, Queensland, Australia | AccuWeather</a></p>\n      <p class='url'>https://www.accuweather.com/en/au/brisbane-cbd/1-13903_1_al/weather-today/1-13903_1_al</p>\n    </div>\n  </li>\n  <li>\n    <div class='citation web'>\n      <p><a href='http://www.bom.gov.au/places/qld/brisbane/'>Brisbane Weather - Bureau of Meteorology</a></p>\n      <p class='url'>http://www.bom.gov.au/places/qld/brisbane/</p>\n    </div>\n  </li>\n  <li>\n    <div class='citation web'>\n      <p><a href='https://www.willyweather.com.au/qld/brisbane/brisbane.html.'>Brisbane Weather Forecast, QLD 4000 - WillyWeather</a></p>\n      <p class='url'>https://www.willyweather.com.au/qld/brisbane/brisbane.html.</p>\n    </div>\n  </li>\n</ol>\n</div>\n\n<style>\n.references { margin-top: 30px; border-top: 1px solid #e0e0e0; padding-top: 20px; }\n.references h3 { font-size: 1.3rem; margin-bottom: 15px; }\n.references ol { padding-left: 20px; }\n.citation { margin-bottom: 12px; }\n.citation a { color: inherit; text-decoration: underline; }\n.citation a:hover { opacity: 0.8; }\n.citation.academic p { line-height: 1.5; }\n.citation.web .url { font-size: 0.85rem; color: #888; margin-top: 3px; }\n</style>" """
+    print(markdown_to_speech(realtext))

@@ -12,6 +12,7 @@ from datetime import datetime
 import json
 from pprint import pprint
 from dotenv import load_dotenv
+import random
 
 from PySide6.QtCore import QObject, Signal, QMutex, QThreadPool
 
@@ -45,6 +46,42 @@ PYTHONTOOLS_BASEDIR = pathlib.Path("~/.rwbtmp/python")
 if not PYTHONTOOLS_BASEDIR.exists():
     os.makedirs(PYTHONTOOLS_BASEDIR, exist_ok=True)
 
+RESEARCHING_FEEDBACKS= ["OK, researching now",
+                       "OK, let me check that",
+                       "Hang on, I am looking for it",
+                       "OK, let me check that for you",
+                       "Searching for you now",
+                       "OK, let me find that for you",
+                       "I am looking for it now",
+                       "OK, let me check that for you",
+                       "Searching for you now",
+                       "OK, let me find that for you",
+                       "I am looking for it now",
+]
+
+    
+RESEARCH_COMPLETED_FEEDBACKS = ["I found something. Processing it now",
+                                "Got results, analyzing them now",
+                                "Found something, let me check it",
+                                "Search succesful, need time to analyze",
+                                "Interesting results, analyzing now",
+                                "Give me some time to look at the results",
+                                "I found something, let me check it",
+]
+
+
+def random_choice(choices: List[str]) -> str:
+    """Randomly select a choice from the provided list.
+    
+    Args:
+        choices: List of choices to select from
+        
+    Returns:
+        str: A randomly selected choice
+    """
+    if not choices:
+        return ""
+    return random.choice(choices)
 
 class RWBAgent(QObject):
     """Handles LLM inference and streaming responses."""
@@ -445,10 +482,10 @@ class RWBAgent(QObject):
                     #self._send_feedback("Starting to generate response...", "info")
                 case 'ToolCallStarted':
                     self._send_feedback(f"Using tool: {chunk.content}", "info")
-                    self.audio_processor.tts(f"OK, hang on while I am researching")
+                    self.audio_processor.tts(random_choice(RESEARCHING_FEEDBACKS))
                 case 'ToolCallCompleted':
                     self._send_feedback(f"Tool call completed: {chunk.content}", "info")
-                    self.audio_processor.tts(f"OK, I found something. Processing it now")
+                    self.audio_processor.tts(random_choice(RESEARCH_COMPLETED_FEEDBACKS))
                 case 'UpdatingMemory':
                     self._send_feedback("Updating conversation memory...", "debug")
                 case 'FinalResponse':
