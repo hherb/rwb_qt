@@ -21,7 +21,6 @@ from .styles import (
     BUTTON_TALK,
     BUTTON_RECORDING,
     BUTTON_PROCESSING,
-    BUTTON_STYLE_NORMAL,
     BUTTON_STYLE_RECORDING,
 )
 from .history_list import HistoryList

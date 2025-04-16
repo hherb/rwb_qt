@@ -15,6 +15,9 @@ from dotenv import load_dotenv
 
 from PySide6.QtCore import QObject, Signal, QMutex, QThreadPool
 
+# Import the context manager for user and assistant settings
+from rwb.context import context_manager
+
 # Import the sentence splitter at module level
 from rwb.audio.processor import split_into_sentences
 from rwb.agents.worker import InputProcessorWorker
@@ -26,6 +29,7 @@ from agno.tools.duckduckgo import DuckDuckGoTools
 from rwb.tools.pubmed import PubMedTools
 from agno.tools.python import PythonTools
 from agno.tools.wikipedia import WikipediaTools
+from agno.tools.website import WebsiteTools
 
 
 #MODEL= "phi4:latest"
@@ -45,27 +49,27 @@ if not PYTHONTOOLS_BASEDIR.exists():
 class RWBAgent(QObject):
     """Handles LLM inference and streaming responses."""
     
-    # Define signals
-    feedback = Signal(str, str)  # Signal for feedback messages (message, message_type)
-    text_update = Signal(str, str)  # Signal for text updates (message_id, text)
-    processing_complete = Signal()  # Signal for when processing is complete
+    # Signal definitions
+    feedback = Signal(str, str)  # Emits (message, type)
+    text_update = Signal(str, str)  # Emits (message_id, text)
+    processing_complete = Signal()  # Emits when processing is complete
     
     def __init__(self, model_name: str = None):
-        """Initialize the agent.
+        """Initialize the RWBAgent.
         
         Args:
-            model_name: Name of the LLM model to use
+            model_name: The name of the LLM model to use (optional)
         """
         super().__init__()
-        if not model_name:
-            model_name = MODEL
-        self.model_name = model_name
-        self.audio_processor = None  # Will be set later
-        self.current_message_id = None
+        self.model_name = model_name or "mistral-small3.1"
+        self.audio_processor = None
+        self.current_audio_data = None
+        self.conversation_history = []
+        self.current_message_id = ""
+        self.saved_mute_state = False  # Track mute state across STT processing
         
-        # Send feedback message
+        # Initialize the model
         self._send_feedback(f"Initializing RWBAgent with model: {self.model_name}", "info")
-        
         self.agent = Agent(
             model=Ollama(id=self.model_name),
             add_history_to_messages=True,
@@ -73,18 +77,56 @@ class RWBAgent(QObject):
             num_history_responses=5,
             read_chat_history=True,
             tools=[DuckDuckGoTools(), 
-                   PubMedTools(email=AUTHOR_EMAIL, max_results=20), 
+                   WebsiteTools(),
+                   PubMedTools(email=self.get_user().email, max_results=20), 
                    WikipediaTools(), 
                    PythonTools(base_dir=PYTHONTOOLS_BASEDIR)],
-            instructions=dedent(f"""Your name is Emily. Today's actual date is {datetime.now().strftime('%Y-%m-%d')}.
-            I am Dr Horst Herb, a German physician living in Australia. You may address me as Horst
-            You are a helpful research assistant able to choose and use tools when appropriate.
-            If you are not confident that you can answer the user with confidence, select the most appropriate tool
-            to answer. Be concise in your answer.
-            After using a tool, always provide a helpful response based on the tool's output."""),
+            instructions=dedent(self._build_instructions()),
             show_tool_calls=True,
             markdown=True,
         )
+    
+    def _build_instructions(self):
+        """Build the base instructions for the agent using context manager data.
+        
+        Returns:
+            str: The constructed base instructions
+        """
+        # Get user and assistant settings from context manager
+        user = self.get_user()
+        assistant = context_manager.assistant
+        
+        # Building the prompt with user and assistant settings
+        base_instructions = f"""Your name is {assistant.name}. Today's actual date is {datetime.now().strftime('%Y-%m-%d')}.
+            I am {user.title} {user.firstname} {user.surname}. You may address me as {user.firstname}.
+            You are a helpful research assistant able to choose and use tools when appropriate.
+            {assistant.background}
+            
+            If you are not confident that you can answer the user with confidence, select the most appropriate tool
+            to answer. Be concise in your answer.
+            I often use a voice interface to communicate with you. Sometimes the resulting text is distorted.
+            I often ask to search for information on PubMed, but this is sometimes transcribed as "popmat" or similar.
+            So, if it is medicine and search related and vaguealy would sound like "pubmed", use PubMed.
+            If you are not sure about the text, ask me to repeat it.
+            After using a tool, always provide a helpful response based on the tool's output.
+            If the tool does not yield useful context, try the next likely tool that might give and answer.
+            If you have exhuasted your tools and still did not find the answer, tell me that you did not find an answer."""
+        
+        # Add any custom base prompt if available
+        if assistant.base_prompt:
+            base_instructions += f"\n\n{assistant.base_prompt}"
+        
+        return base_instructions
+    
+    def get_user(self) -> Any:
+        """Get user information from settings.
+        
+        Returns:
+            User object with title, firstname, surname, and other attributes
+        """
+        # Get user from context manager (will load from settings)
+        return context_manager.user
+
     
     def set_audio_processor(self, processor) -> None:
         """Set the audio processor.
@@ -100,6 +142,11 @@ class RWBAgent(QObject):
         Args:
             input_text: The text input from the user
         """
+        # Ensure we preserve mute state that might have been set earlier
+        # This fixes the issue where voice-to-text processing resets mute settings
+        if hasattr(self, 'saved_mute_state') and self.audio_processor:
+            # Restore the saved mute state to ensure it persists through STT processing
+            self.audio_processor.set_mute_state(self.saved_mute_state)
         self.current_message_id = str(id(input_text))  # Generate a unique ID for this message
         
         # Start processing the user input
@@ -155,6 +202,14 @@ class RWBAgent(QObject):
         if not text:
             self._send_feedback("Failed to transcribe speech", "error")
             return
+            
+        # Ensure we preserve the audio processor's mute state
+        # Store the current mute state before processing
+        mute_state = False
+        if self.audio_processor and hasattr(self.audio_processor, 'mute_enabled'):
+            mute_state = self.audio_processor.mute_enabled
+            # Store mute state as a property so we can restore it later
+            self.saved_mute_state = mute_state
             
         # Generate a unique ID for this message
         self.current_message_id = str(id(text))
@@ -390,8 +445,10 @@ class RWBAgent(QObject):
                     #self._send_feedback("Starting to generate response...", "info")
                 case 'ToolCallStarted':
                     self._send_feedback(f"Using tool: {chunk.content}", "info")
+                    self.audio_processor.tts(f"OK, hang on while I am researching")
                 case 'ToolCallCompleted':
                     self._send_feedback(f"Tool call completed: {chunk.content}", "info")
+                    self.audio_processor.tts(f"OK, I found something. Processing it now")
                 case 'UpdatingMemory':
                     self._send_feedback("Updating conversation memory...", "debug")
                 case 'FinalResponse':
@@ -478,6 +535,34 @@ class RWBAgent(QObject):
         """
         if not self.audio_processor or not sentence.strip():
             return
+        
+        # Enhanced debug: Print current state before any changes
+        print(f"Before restore: Audio processor mute state = {getattr(self.audio_processor, 'mute_enabled', False)}")
+        print(f"Agent's saved mute state = {getattr(self, 'saved_mute_state', False)}")
+        
+        # CRITICAL FIX: Make sure we restore saved mute state before TTS processing
+        # This ensures the mute checkbox setting is respected even after voice input
+        if hasattr(self, 'saved_mute_state'):
+            print(f"Applying saved mute state: {self.saved_mute_state}")
+            self.audio_processor.set_mute_state(self.saved_mute_state)
+        
+        # Force check mute state from AudioAssistant class if available
+        # This ensures we're always respecting the current UI checkbox state
+        try:
+            # Walk up to find the AudioAssistant instance that owns this agent
+            from rwb.audio.assistant import AudioAssistant
+            import gc
+            for obj in gc.get_objects():
+                if isinstance(obj, AudioAssistant) and hasattr(obj, 'mute_tts'):
+                    print(f"Found AudioAssistant with mute_tts = {obj.mute_tts}")
+                    self.saved_mute_state = obj.mute_tts
+                    self.audio_processor.set_mute_state(obj.mute_tts)
+                    break
+        except Exception as e:
+            print(f"Error finding AudioAssistant: {e}")
+            
+        # Final check of mute state before sending to TTS
+        print(f"Final mute check before TTS: {getattr(self.audio_processor, 'mute_enabled', False)}")
             
         # Use the audio processor to convert text to speech
         self.audio_processor.tts(sentence.strip())

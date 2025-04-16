@@ -145,7 +145,7 @@ class PubMedTools(Toolkit):
         Args:
             question (str): The natural language query.
             model (str): The model to use for generating the query. 
-                        If not provided, defaults to "gemma3:4b".
+                        If not provided, defaults to "gemma3:4b" (recommended!)
             
         Returns:
             str: The crafted PubMed query.

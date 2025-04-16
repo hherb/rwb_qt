@@ -10,21 +10,16 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QLineEdit,
     QTextEdit,
-    QFrame
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QIcon, QColor, QPalette
 
 from .styles import (
-    BUTTON_STYLE_NORMAL,
     BUTTON_STYLE_RECORDING,
     BUTTON_STYLE_STOP,
     BUTTON_STYLE_MUTE,
-    SCROLL_AREA_STYLE,
     STATUS_LABEL_STYLE,
-    CHAT_CONTAINER_STYLE,
     BUTTON_TALK,
     STATUS_READY,
     MIC_BODY_STYLE,
@@ -123,12 +118,9 @@ def create_text_input() -> QTextEdit:
     input_field.setAcceptRichText(False)
     input_field.setStyleSheet("""
         QTextEdit {
-            background-color: #f0f0f0;
-            color: #333333;
             border: none;
             border-radius: 20px;
             padding: 15px;
-            selection-background-color: #4CAF50;
         }
     """)
     return input_field
@@ -164,13 +156,11 @@ def create_chat_scroll_area() -> tuple[QScrollArea, QWidget, QVBoxLayout]:
     """
     scroll_area = QScrollArea()
     scroll_area.setWidgetResizable(True)
-    scroll_area.setStyleSheet(SCROLL_AREA_STYLE)
     
     chat_container = QWidget()
     chat_layout = QVBoxLayout(chat_container)
     chat_layout.setAlignment(Qt.AlignTop)
     chat_layout.setSpacing(10)
-    chat_container.setStyleSheet(CHAT_CONTAINER_STYLE)
     
     scroll_area.setWidget(chat_container)
     return scroll_area, chat_container, chat_layout

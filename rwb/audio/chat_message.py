@@ -5,12 +5,12 @@ in the chat interface with proper styling and layout.
 """
 
 from enum import Enum
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QTextEdit, QSizePolicy
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QTextCursor, QPixmap
+from PySide6.QtGui import QPixmap
 import markdown
 import os
-from .ui.styles import MESSAGE_USER_STYLE, MESSAGE_SYSTEM_STYLE, ICON_LABEL_STYLE
+#from .ui.styles import ICON_LABEL_STYLE
 
 class MessageSender(Enum):
     """Enum for different types of message senders."""
@@ -29,36 +29,37 @@ class ChatMessage(QFrame):
         # Set style based on sender
         style_map = {
             MessageSender.USER: {
-                "background": "#2d2d2d",
                 "margin": "right",
-                "icon": "horstcartoon.png"
+                "icon": "horstcartoon.png",
+                "background": "#f2f2f2"  # Slightly darker than white for user messages
             },
             MessageSender.ASSISTANT: {
-                "background": "#3d3d3d",
                 "margin": "left",
                 "icon": "ollama_transparent.png",
-                "icon_background": "#add8e6"  # Light blue background
+                "icon_background": "#add8e6",  # Light blue background
+                "background": "#ffffff"  # Slightly brighter for assistant messages
             },
             MessageSender.SYSTEM: {
-                "background": "#1d1d1d",
                 "margin": "left",
-                "icon": "⚙️"
+                "icon": "⚙️",
+                "background": "#f8f8f8"  # Neutral background for system messages
             },
             MessageSender.OTHER: {
-                "background": "#4d4d4d",
                 "margin": "left",
-                "icon": "❓"
+                "icon": "❓",
+                "background": "#f8f8f8"  # Neutral background
             }
         }
         
         style = style_map[sender]
         self.setStyleSheet(f"""
             QFrame#chatMessage {{
-                background-color: {style['background']};
                 border-radius: 30px;
                 padding: 10px;
                 margin: 5px;
                 margin-{style['margin']}: 30px;
+                background-color: {style['background']};
+                border: 1px solid #e0e0e0;  /* Light gray border to enhance visibility */
             }}
         """)
         
@@ -97,11 +98,11 @@ class ChatMessage(QFrame):
             else:
                 print(f"Icon not found at: {icon_path}")
                 # Fallback if image not found
-                icon_label.setStyleSheet(ICON_LABEL_STYLE)
+                #icon_label.setStyleSheet(ICON_LABEL_STYLE)
                 icon_label.setText("👤")
         else:
             # For emoji icons
-            icon_label.setStyleSheet(ICON_LABEL_STYLE)
+            #icon_label.setStyleSheet(ICON_LABEL_STYLE)
             icon_label.setText(style['icon'])
             
         layout.addWidget(icon_label)
@@ -116,41 +117,17 @@ class ChatMessage(QFrame):
         self.text_edit.setOpenExternalLinks(False)  # Don't open links automatically
         self.text_edit.setOpenLinks(False)  # Prevent internal navigation
         self.text_edit.anchorClicked.connect(self._open_external_link)
+        
+        # Add rounded corners to the text browser
         self.text_edit.setStyleSheet("""
-            QTextEdit {
+            QTextBrowser {
                 background-color: transparent;
                 border: none;
                 font-size: 14px;
-                color: #ffffff;
-            }
-            a {
-                color: #00BFFF;  /* Much brighter blue (DeepSkyBlue) for better contrast */
-                text-decoration: underline;
-                font-weight: bold;
-            }
-            a:hover {
-                color: #00FFFF;  /* Cyan on hover - even brighter */
-                text-decoration: underline;
-            }
-            code {
-                background-color: #2d2d2d;
-                padding: 2px 4px;
-                border-radius: 3px;
-                font-family: monospace;
-            }
-            pre {
-                background-color: #2d2d2d;
-                padding: 10px;
-                border-radius: 15px;
-                margin: 10px 0;
-            }
-            blockquote {
-                border-left: 4px solid #4CAF50;
-                margin: 10px 0;
-                padding-left: 15px;
-                color: #cccccc;
+                border-radius: 20px;
             }
         """)
+        
         self.text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -172,11 +149,8 @@ class ChatMessage(QFrame):
                      html)
         
         # Add custom styling
-        return f"""
-            <div style="color: #ffffff;">
-                {html}
-            </div>
-        """
+        return html
+
     
     def _open_external_link(self, url):
         """Open links in the system's default web browser."""

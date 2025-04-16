@@ -45,6 +45,8 @@ class InputProcessorWorker(QRunnable):
             # Stream responses
             assistant_text = ""
             current_sentence = ""
+            # Keep track of text we've already processed for TTS to avoid duplicating speech
+            processed_text_for_tts = ""
             
             for chunk in self.stream_func(self.input_text):
                 if self.is_cancelled:
@@ -53,13 +55,17 @@ class InputProcessorWorker(QRunnable):
                 if not chunk:  # Skip empty chunks
                     continue
                     
+                # Add to full text for display - this won't be reformatted
                 assistant_text += chunk
+                
+                # Also track current sentence for TTS processing  
                 current_sentence += chunk
                 
-                # Emit the chunk
+                # Emit the chunk for UI update without affecting formatting
                 self.signals.chunk.emit(chunk)
                 
-                # Check if we have a complete sentence for TTS
+                # Only process for TTS when we have a complete sentence
+                # This prevents text reformatting in the UI
                 sentence_end = False
                 for end in ('.', '!', '?'):
                     if end in current_sentence:
@@ -69,15 +75,26 @@ class InputProcessorWorker(QRunnable):
                             sentence_end = True
                             break
                 
-                # Process complete sentence
+                # Process complete sentence for TTS only, not for display
                 if sentence_end and current_sentence.strip():
-                    # Split the current sentence into individual sentences
-                    sentences = split_into_sentences(current_sentence)
+                    # Find new content to process for speech
+                    new_content = current_sentence
+                    if processed_text_for_tts:
+                        # Only process the part that hasn't been processed yet
+                        new_content = current_sentence[len(processed_text_for_tts):]
                     
-                    # Process each individual sentence
-                    for sentence in sentences:
-                        if sentence.strip():
-                            self.signals.sentence_ready.emit(sentence.strip())
+                    # If there's actually new content to process
+                    if new_content.strip():
+                        # Split into sentences for TTS processing only
+                        sentences = split_into_sentences(new_content)
+                        
+                        # Process each individual sentence for speech only
+                        for sentence in sentences:
+                            if sentence.strip():
+                                self.signals.sentence_ready.emit(sentence.strip())
+                    
+                    # Keep track of what we've already processed
+                    processed_text_for_tts = current_sentence
                     
                     current_sentence = ""
             

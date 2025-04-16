@@ -18,6 +18,7 @@ from .chat_message import ChatMessage, MessageSender
 from .chat_history import ChatHistory
 from .recorder import AudioRecorder
 from .ui.settings_dialog import SettingsDialog
+from rwb.context import context_manager
 from .ui.components import (
     create_status_label,
     create_talk_button,
@@ -37,7 +38,6 @@ from .ui.styles import (
     BUTTON_TALK,
     BUTTON_RECORDING,
     BUTTON_PROCESSING,
-    BUTTON_STYLE_NORMAL,
     BUTTON_STYLE_RECORDING,
     SETTINGS_BUTTON_STYLE,
     TAB_WIDGET_STYLE,
@@ -65,27 +65,15 @@ class AudioAssistant(QMainWindow):
         self.resize(size)
         self.move(pos)
         
-        # Set the dark theme for the entire window
-        self.setStyleSheet("""
-            QMainWindow, QWidget {
-                background-color: #1a1a1a;
-                color: #cccccc;
-            }
-            QTabWidget::pane {
-                background-color: #1a1a1a;
-                border: none;
-            }
-        """)
-        
         # Initialize chat history
         self.chat_history = ChatHistory()
         
         # Create UI components first (this will initialize self.chat_layout)
         self.setup_tabbed_ui()
         
-        # Initialize the RWB agent for LLM inference with model from settings
+        # Initialize the RWB agent for LLM inference with model from context manager
         # only after UI components are set up
-        model_name = self.settings.value("model/name", "qwen2.5:14b-instruct-q8_0")
+        model_name = context_manager.model_name
         self.agent = RWBAgent(model_name=model_name)
         
         # Initialize audio recorder
@@ -123,6 +111,7 @@ class AudioAssistant(QMainWindow):
         self.current_messages: Dict[str, ChatMessage] = {}
         self.current_message_id: str = ""  # Current session message ID
         self.attached_files: list[str] = []  # List to store attached file paths
+        self.mute_tts: bool = False  # Track whether TTS output should be muted
     
     def setup_tabbed_ui(self) -> None:
         """Set up the tabbed user interface."""
@@ -148,9 +137,16 @@ class AudioAssistant(QMainWindow):
         self.settings_button.setStyleSheet(SETTINGS_BUTTON_STYLE)
         self.settings_button.clicked.connect(self.open_settings_dialog)
         
-        # Add settings button to toolbar layout
+        # Create mute checkbox to prevent TTS output
+        from PySide6.QtWidgets import QCheckBox
+        self.mute_checkbox = QCheckBox("Mute")
+        self.mute_checkbox.setToolTip("Prevent voice output (TTS)")
+        self.mute_checkbox.stateChanged.connect(self.toggle_mute)
+        
+        # Add settings button and mute checkbox to toolbar layout
         toolbar_layout.addWidget(self.settings_button)
-        toolbar_layout.addStretch(1)  # Push settings button to the left
+        toolbar_layout.addWidget(self.mute_checkbox)
+        toolbar_layout.addStretch(1)  # Push settings button and checkbox to the left
         
         # Add toolbar to main layout
         main_layout.addWidget(toolbar)
@@ -398,10 +394,16 @@ class AudioAssistant(QMainWindow):
             self.status_label.setText(STATUS_PROCESSING)
             self.talk_button.setEnabled(False)
             self.talk_button.setIcon(QIcon("rwb/icons/sst_green.png"))  # Reset icon back to green
+            #self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)  # Maintain the proper styling with rounded corners
             self.stop_button.setVisible(True)
             
             # Create a unique message ID for this session
             self.current_message_id = str(id(self)) + "_" + str(id(audio_data))
+            
+            # If muted, re-enable the button immediately so it doesn't get stuck
+            if self.mute_tts:
+                # Need to set a small delay to allow the UI to update properly
+                QTimer.singleShot(100, self.handle_processing_ended)
             
             # Process audio directly with the agent
             self.agent.process_audio_input(audio_data, self.recorder.RATE)
@@ -416,7 +418,7 @@ class AudioAssistant(QMainWindow):
         self.status_label.setText(STATUS_STOPPED)
         self.talk_button.setEnabled(True)
         self.stop_button.setVisible(False)
-        self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
+        #self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
         
         # Reset cancellation flag for future tasks
         if self.processor:
@@ -538,7 +540,8 @@ class AudioAssistant(QMainWindow):
     def handle_processing_ended(self) -> None:
         """Handle the end of processing."""
         self.status_label.setText(STATUS_READY)
-        self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
+        # Apply proper styling with rounded corners to talk button
+        #self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
         self.talk_button.setEnabled(True)
         self.stop_button.setVisible(False)
     
@@ -768,10 +771,9 @@ class AudioAssistant(QMainWindow):
                 self.handle_feedback(f"Voice changed to {selected_voice}", "info")
             
             # Update the model name if needed
-            model_name = self.settings.value("model/name", "")
+            model_name = context_manager.model_name
             if model_name and hasattr(self, 'agent'):
                 # Update the agent's model name if possible
-                # This might need to be implemented in the RWBAgent class
                 try:
                     self.agent.set_model_name(model_name)
                 except AttributeError:
@@ -788,3 +790,34 @@ class AudioAssistant(QMainWindow):
         # Don't do anything here as the agent's process_audio_input method
         # already handles adding the text to the UI
         pass
+    
+    @Slot(int)
+    def toggle_mute(self, state: int) -> None:
+        """Toggle TTS muting based on checkbox state.
+        
+        Args:
+            state: The checkbox state (Qt.Checked or Qt.Unchecked)
+        """
+        from PySide6.QtCore import Qt
+        
+        # Get the Qt CheckState enum from the integer value
+        check_state = Qt.CheckState(state)
+        
+        # Compare directly to the enum value (Qt.Checked) rather than the integer value
+        self.mute_tts = (check_state == Qt.Checked)
+        print(f"DEBUG: Checkbox state: {check_state}, mute_tts set to: {self.mute_tts}")
+        
+        # Update processor's mute state if it exists
+        if hasattr(self, 'processor'):
+            # Pass the correct boolean value to the processor
+            self.processor.set_mute_state(self.mute_tts)
+            
+        # Only display feedback message if state actually changed
+        # Avoid displaying "unmuted" when the box is actually checked
+        if (state == Qt.Checked and self.mute_tts) or (state == Qt.Unchecked and not self.mute_tts):
+            status = "muted" if self.mute_tts else "unmuted"
+            self.handle_feedback(f"Voice output {status}", "info")
+        
+        # If currently muted and speaking, stop the voice output
+        if self.mute_tts and hasattr(self, 'processor') and self.processor.is_speaking:
+            self.stop_voice_output()

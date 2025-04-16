@@ -36,12 +36,12 @@ class HistoryItemWidget(QWidget):
         self.file_path = file_path
         
         # Set widget styling to prevent border residues
-        self.setStyleSheet("""
-            QWidget {
-                background-color: transparent;
-                border: none;
-            }
-        """)
+        # self.setStyleSheet("""
+        #     QWidget {
+        #         background-color: transparent;
+        #         border: none;
+        #     }
+        # """)
         
         # Create layout with appropriate padding
         layout = QHBoxLayout(self)
@@ -60,13 +60,13 @@ class HistoryItemWidget(QWidget):
         
         # Create title label with bold styling
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("color: white; font-weight: bold; font-size: 13px;")
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 13px;")
         text_layout.addWidget(self.title_label)
         
         # Create preview label with lighter styling if available
         if preview:
             self.preview_label = QLabel(preview)
-            self.preview_label.setStyleSheet("color: #b0b0b0; font-size: 12px;")
+            self.preview_label.setStyleSheet("font-size: 12px;")
             self.preview_label.setWordWrap(True)
             self.preview_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             text_layout.addWidget(self.preview_label)
@@ -150,7 +150,7 @@ class HistoryList(QWidget):
         
         # Header
         header = QLabel("Chat History")
-        header.setStyleSheet(f"font-size: {int(line_height * 1.4)}px; font-weight: bold; color: white; margin-bottom: 8px;")
+        header.setStyleSheet(f"font-size: {int(line_height * 1.4)}px; font-weight: bold; margin-bottom: 8px;")
         layout.addWidget(header)
         
         # List widget
@@ -170,50 +170,50 @@ class HistoryList(QWidget):
         self.list_widget.setItemAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         
         # Use calculated values in the stylesheet
-        self.list_widget.setStyleSheet(f"""
-            QListWidget {{
-                background-color: #292929;
-                border-radius: {border_radius}px;
-                padding: {int(line_height*0.3)}px;
-                border: 1px solid #3a3a3a;
-                outline: none;
-                selection-background-color: transparent;
-                show-decoration-selected: 0;
-                alternate-background-color: #313131;
-            }}
-            QListWidget::item {{
-                color: #ffffff;
-                padding: {item_padding}px;
-                border-radius: {border_radius}px;
-                margin: {item_margin}px 0px;
-                border: none;
-                outline: none;
-            }}
-            QListWidget::item:selected {{
-                background-color: #3d3d3d;
-                border-left: 3px solid #4CAF50;
-                border-top: none;
-                border-right: none;
-                border-bottom: none;
-                outline: none;
-            }}
-            QListWidget::item:alternate {{
-                background-color: #313131;
-            }}
-            QListWidget::item:hover {{
-                background-color: #363636;
-            }}
-            /* Remove separator lines */
-            QListView::separator {{
-                height: 0px;
-                background: transparent;
-            }}
+        # self.list_widget.setStyleSheet(f"""
+        #     QListWidget {{
+        #         background-color: #292929;
+        #         border-radius: {border_radius}px;
+        #         padding: {int(line_height*0.3)}px;
+        #         border: 1px solid #3a3a3a;
+        #         outline: none;
+        #         selection-background-color: transparent;
+        #         show-decoration-selected: 0;
+        #         alternate-background-color: #313131;
+        #     }}
+        #     QListWidget::item {{
+        #         color: #ffffff;
+        #         padding: {item_padding}px;
+        #         border-radius: {border_radius}px;
+        #         margin: {item_margin}px 0px;
+        #         border: none;
+        #         outline: none;
+        #     }}
+        #     QListWidget::item:selected {{
+        #         background-color: #3d3d3d;
+        #         border-left: 3px solid #4CAF50;
+        #         border-top: none;
+        #         border-right: none;
+        #         border-bottom: none;
+        #         outline: none;
+        #     }}
+        #     QListWidget::item:alternate {{
+        #         background-color: #313131;
+        #     }}
+        #     QListWidget::item:hover {{
+        #         background-color: #363636;
+        #     }}
+        #     /* Remove separator lines */
+        #     QListView::separator {{
+        #         height: 0px;
+        #         background: transparent;
+        #     }}
             
-            /* Make sure no focus outline appears */
-            *:focus {{
-                outline: none;
-            }}
-        """)
+        #     /* Make sure no focus outline appears */
+        #     *:focus {{
+        #         outline: none;
+        #     }}
+        # """)
         
         # Configure list widget behavior
         self.list_widget.setVerticalScrollMode(QListWidget.ScrollPerPixel)  # Smooth scrolling
@@ -226,21 +226,21 @@ class HistoryList(QWidget):
         # Refresh button with modern styling
         refresh_button = QPushButton("Refresh")
         refresh_button.setMinimumHeight(int(line_height * 2))  # Button height based on line height
-        refresh_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: #3a3a3a;
-                border-radius: {int(line_height * 0.3)}px;
-                padding: {int(line_height * 0.3)}px;
-                color: white;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: #4a4a4a;
-            }}
-            QPushButton:pressed {{
-                background-color: #2a2a2a;
-            }}
-        """)
+        # refresh_button.setStyleSheet(f"""
+        #     QPushButton {{
+        #         background-color: #3a3a3a;
+        #         border-radius: {int(line_height * 0.3)}px;
+        #         padding: {int(line_height * 0.3)}px;
+        #         color: white;
+        #         font-weight: bold;
+        #     }}
+        #     QPushButton:hover {{
+        #         background-color: #4a4a4a;
+        #     }}
+        #     QPushButton:pressed {{
+        #         background-color: #2a2a2a;
+        #     }}
+        # """)
         refresh_button.clicked.connect(self._load_histories)
         layout.addWidget(refresh_button)
     
@@ -287,12 +287,12 @@ class HistoryList(QWidget):
             
             # Create custom item style to avoid bright residues
             # Use alternating background colors based on index
-            custom_style = f"""
-                background-color: {'#313131' if idx % 2 == 1 else '#292929'};
-                border: none;
-                outline: none;
-            """
-            item_widget.setStyleSheet(f"QWidget {{ {custom_style} }}")
+            # custom_style = f"""
+            #     background-color: {'#313131' if idx % 2 == 1 else '#292929'};
+            #     border: none;
+            #     outline: none;
+            # """
+            # item_widget.setStyleSheet(f"QWidget {{ {custom_style} }}")
             
             # Set the widget
             self.list_widget.setItemWidget(item, item_widget)
@@ -385,26 +385,26 @@ class HistoryList(QWidget):
                 list_widget = self.list_widget.itemWidget(list_item)
                 idx = i  # Get the item's index
                 
-                if list_widget == widget:
-                    # Selected item
-                    list_widget.setStyleSheet("""
-                        QWidget {
-                            background-color: #3d3d3d;
-                            border-left: 3px solid #4CAF50;
-                            border-top: none;
-                            border-right: none;
-                            border-bottom: none;
-                            outline: none;
-                        }
-                    """)
-                else:
-                    # Not selected - use alternating colors
-                    custom_style = f"""
-                        background-color: {'#313131' if idx % 2 == 1 else '#292929'};
-                        border: none;
-                        outline: none;
-                    """
-                    list_widget.setStyleSheet(f"QWidget {{ {custom_style} }}")
+                # if list_widget == widget:
+                #     # Selected item
+                #     list_widget.setStyleSheet("""
+                #         QWidget {
+                #             background-color: #3d3d3d;
+                #             border-left: 3px solid #4CAF50;
+                #             border-top: none;
+                #             border-right: none;
+                #             border-bottom: none;
+                #             outline: none;
+                #         }
+                #     """)
+                # else:
+                #     # Not selected - use alternating colors
+                #     custom_style = f"""
+                #         background-color: {'#313131' if idx % 2 == 1 else '#292929'};
+                #         border: none;
+                #         outline: none;
+                #     """
+                #     list_widget.setStyleSheet(f"QWidget {{ {custom_style} }}")
             
             # Emit the signal
             self.history_selected.emit(file_path)

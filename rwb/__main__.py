@@ -25,9 +25,6 @@ def main() -> None:
     # Create and start the application
     app = QApplication(sys.argv)
     
-    # Apply global tooltip style
-    app.setStyleSheet(TOOLTIP_STYLE)
-    
     window = AudioAssistant()
     window.show()
     sys.exit(app.exec())

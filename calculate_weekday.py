@@ -1,1 +1,0 @@
-import datetime\ndate = datetime.datetime(2025, 4, 13)\nprint(date.strftime('%A'))

@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QRunnable, QObject, Signal, Slot, QThreadPool, QTimer
 from typing import Optional, Any, Iterator, List, Dict, Tuple, Deque
 from collections import deque
+from rwb.helpers.textsanitizer import markdown_to_speech
 
 
 def split_into_sentences(text: str) -> List[str]:
@@ -51,6 +52,9 @@ def split_into_sentences(text: str) -> List[str]:
         result.append(sentences[-1].strip())
         
     return result
+
+
+
 
 
 class AudioProcessorSignals(QObject):
@@ -123,6 +127,7 @@ class AudioProcessor(QObject):
         self.is_speaking = False
         self.output_stream = None
         self.processing_cancelled = False
+        self.mute_enabled = False  # Flag to indicate if TTS should be muted
         
         # Thread pool for background processing
         self.threadpool = QThreadPool()
@@ -362,48 +367,18 @@ class AudioProcessor(QObject):
         if not text or not text.strip():
             return
             
+        # Skip TTS processing if mute is enabled
+        if self.mute_enabled:
+            return
+            
         processed_text = text.strip()
-        
-        #print(f"sanitising text for speaking ...")
-        # Replace URLs with ", link provided."
-        # Handles http://, https://, and www. links - fixed to properly handle domain names
-        processed_text = re.sub(r'(https?://\S+|www\.\S+)', ' link provided ', processed_text)
-        
-        # Strip HTML tags
-        processed_text = re.sub(r'<[^>]+>', '', processed_text)
-        
-        # Basic Markdown removal 
-        # Remove bold/italics markers (*, _)
-        processed_text = re.sub(r'(\*\*|__)(.*?)\1', r'\2', processed_text) # Bold
-        processed_text = re.sub(r'(\*|_)(.*?)\1', r'\2', processed_text)     # Italics
-        # Remove inline code markers (`)
-        processed_text = re.sub(r'`([^`]+)`', r'\1', processed_text)
-        # Remove strikethrough (~~) - content should not be read
-        processed_text = re.sub(r'~~(.*?)~~', '', processed_text)
-        # Remove headers (#)
-        processed_text = re.sub(r'^#+\s+', '', processed_text, flags=re.MULTILINE)
-        # Remove Markdown links/images markers: [text](url) or ![alt](url)
-        processed_text = re.sub(r'\[([^\]]+)\]\(([^)]*)\)', r'\1', processed_text) # Keep link text
-        processed_text = re.sub(r'!\[([^\]]*)\]\(([^)]*)\)', r'\1', processed_text) # Keep alt text (or empty if none)
-        # Remove list markers (*, -, + followed by space) at the beginning of lines
-        processed_text = re.sub(r'^\s*[-*+]\s+', '', processed_text, flags=re.MULTILINE)
-        # Remove blockquotes (>)
-        processed_text = re.sub(r'^>\s*', '', processed_text, flags=re.MULTILINE)
-        # Remove HTML comments
-        processed_text = re.sub(r'<!--.*?-->', '', processed_text, flags=re.DOTALL)
-        # Remove content in <details> tags (commonly used to hide content)
-        processed_text = re.sub(r'<details>.*?</details>', '', processed_text, flags=re.DOTALL)
-        
-        # Add spaces between letters in acronyms (all-capital words up to 6 letters)
-        processed_text = re.sub(r'\b([A-Z]{2,6})\b', lambda m: ' '.join(list(m.group(1))), processed_text)
-        
-        # Remove potential double spacing and leading/trailing whitespace introduced by replacements
-        processed_text = re.sub(r'\s+', ' ', processed_text).strip()
-        # Clean up multiple "link provided" instances
-        processed_text = re.sub(r'(link provided\s+)+', 'link provided ', processed_text)
-        # Clean up spaces around the link placeholder
-        processed_text = re.sub(r'\s+link provided\s+', ' link provided ', processed_text)
 
+        if not processed_text:
+            # If all text was removed, don't queue anything
+            return
+        
+        # Pre-process the text for TTS
+        processed_text = markdown_to_speech(processed_text)
 
         if not processed_text:
             # If all text was removed (e.g., just a URL), don't queue anything
@@ -486,3 +461,20 @@ class AudioProcessor(QObject):
         self.error.emit(f"STT error: {error}")
         # Emit empty text to prevent waiting forever
         self.stt_completed.emit("")
+
+    def set_mute_state(self, muted: bool) -> None:
+        """Set the mute state for TTS output.
+        
+        Args:
+            muted: Whether TTS output should be muted
+        """
+        print(f"Setting mute state to: {muted}")
+        # Make sure we're getting a proper boolean value
+        self.mute_enabled = bool(muted)
+        print(f"AudioProcessor.mute_enabled is now: {self.mute_enabled}")
+        
+        # If currently speaking and now muted, stop the voice output
+        if self.mute_enabled and self.is_speaking:
+            print("Stopping voice output due to mute")
+            self.clear_tts_queue()
+            self.cancel_processing()
