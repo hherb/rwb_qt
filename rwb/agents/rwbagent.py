@@ -52,11 +52,11 @@ RESEARCHING_FEEDBACKS= ["OK, researching now",
                        "Hang on, I am looking for it",
                        "OK, let me check that for you",
                        "Searching for you now",
-                       "OK, let me find that for you",
+                       "Yes, let me find that for you",
                        "I am looking for it now",
-                       "OK, let me check that for you",
+                       "Allright, let me check that for you",
                        "Searching for you now",
-                       "OK, let me find that for you",
+                       "Understood, let me find that for you",
                        "I am looking for it now",
 ]
 
@@ -68,6 +68,8 @@ RESEARCH_COMPLETED_FEEDBACKS = ["I found something. Processing it now",
                                 "Interesting results, analyzing now",
                                 "Give me some time to look at the results",
                                 "I found something, let me check it",
+                                "Sorry, will take a while processing the results",
+
 ]
 
 

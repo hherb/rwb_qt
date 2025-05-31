@@ -1,0 +1,232 @@
+[
+  {
+    "model": "granite3.3:8b",
+    "times": [
+      4.063736200332642,
+      1.4918837547302246,
+      1.3077077865600586
+    ],
+    "average_time": 2.287775913874308,
+    "correct_responses": 0
+  },
+  {
+    "model": "mistral-small3.1:latest",
+    "times": [
+      7.555665969848633,
+      1.6767349243164062,
+      1.5041909217834473
+    ],
+    "average_time": 3.5788639386494956,
+    "correct_responses": 0
+  },
+  {
+    "model": "cogito:70b",
+    "times": [
+      24.512520790100098,
+      11.53567886352539,
+      18.987058877944946
+    ],
+    "average_time": 18.345086177190144,
+    "correct_responses": 1
+  },
+  {
+    "model": "cogito:8b-v1-preview-llama-q8_0",
+    "times": [
+      5.677080154418945,
+      1.507951021194458,
+      1.393996000289917
+    ],
+    "average_time": 2.859675725301107,
+    "correct_responses": 0
+  },
+  {
+    "model": "cogito:14b-v1-preview-qwen-q8_0",
+    "times": [
+      12.482587099075317,
+      5.7345709800720215,
+      6.146941184997559
+    ],
+    "average_time": 8.121366421381632,
+    "correct_responses": 3
+  },
+  {
+    "model": "mistral-small3.1:24b-instruct-2503-q8_0",
+    "times": [
+      9.315723896026611,
+      2.047136068344116,
+      1.8217158317565918
+    ],
+    "average_time": 4.3948585987091064,
+    "correct_responses": 0
+  },
+  {
+    "model": "qwen2.5:3b",
+    "times": [
+      3.2972402572631836,
+      1.4205071926116943,
+      1.446943998336792
+    ],
+    "average_time": 2.05489714940389,
+    "correct_responses": 0
+  },
+  {
+    "model": "qwq:32b-q4_K_M",
+    "times": [
+      24.577847242355347,
+      32.76629400253296,
+      62.415345907211304
+    ],
+    "average_time": 39.91982905069987,
+    "correct_responses": 0
+  },
+  {
+    "model": "qwq:32b-q8_0",
+    "times": [
+      85.04025173187256,
+      82.73922634124756,
+      106.09478998184204
+    ],
+    "average_time": 91.29142268498738,
+    "correct_responses": 0
+  },
+  {
+    "model": "llama3.3:latest",
+    "times": [
+      36.93443036079407,
+      16.10076594352722,
+      15.258001327514648
+    ],
+    "average_time": 22.76439921061198,
+    "correct_responses": 1
+  },
+  {
+    "model": "llama3.3:70b-instruct-q5_K_M",
+    "times": [
+      44.058804988861084,
+      20.45716619491577,
+      20.207090139389038
+    ],
+    "average_time": 28.241020441055298,
+    "correct_responses": 1
+  },
+  {
+    "model": "hhao/qwen2.5-coder-tools:14b",
+    "times": [
+      10.437446117401123,
+      1.662325143814087,
+      2.0316269397735596
+    ],
+    "average_time": 4.710466066996257,
+    "correct_responses": 0
+  },
+  {
+    "model": "qwen2.5-coder:14b-instruct-q8_0",
+    "times": [
+      8.87528109550476,
+      1.9739439487457275,
+      1.884202003479004
+    ],
+    "average_time": 4.244475682576497,
+    "correct_responses": 0
+  },
+  {
+    "model": "qwen2.5-coder:32b-instruct-q8_0",
+    "times": [
+      19.547352075576782,
+      8.489144802093506,
+      2.7924211025238037
+    ],
+    "average_time": 10.276305993398031,
+    "correct_responses": 0
+  },
+  {
+    "model": "qwen2.5-coder:7b-instruct-q8_0",
+    "times": [
+      5.485264301300049,
+      1.6424379348754883,
+      1.3229939937591553
+    ],
+    "average_time": 2.816898743311564,
+    "correct_responses": 0
+  },
+  {
+    "model": "aya-expanse:8b-q8_0",
+    "times": [
+      9.622166156768799,
+      4.712545156478882,
+      4.555263996124268
+    ],
+    "average_time": 6.296658436457316,
+    "correct_responses": 3
+  },
+  {
+    "model": "qwen2.5:32b-instruct-q8_0",
+    "times": [
+      28.081408977508545,
+      7.502853155136108,
+      10.417125940322876
+    ],
+    "average_time": 15.33379602432251,
+    "correct_responses": 1
+  },
+  {
+    "model": "hermes3:8b-llama3.1-q8_0",
+    "times": [
+      6.250615119934082,
+      1.731236219406128,
+      1.770637035369873
+    ],
+    "average_time": 3.2508294582366943,
+    "correct_responses": 0
+  },
+  {
+    "model": "llama3.2:3b-instruct-q8_0",
+    "times": [
+      5.507102966308594,
+      3.8944921493530273,
+      3.505079984664917
+    ],
+    "average_time": 4.30222503344218,
+    "correct_responses": 3
+  },
+  {
+    "model": "qwen2.5:7b-instruct-q8_0",
+    "times": [
+      5.424468040466309,
+      1.719101905822754,
+      1.658266305923462
+    ],
+    "average_time": 2.933945417404175,
+    "correct_responses": 0
+  },
+  {
+    "model": "hermes3:8b-llama3.1-fp16",
+    "times": [
+      8.549322843551636,
+      1.975383996963501,
+      1.7077770233154297
+    ],
+    "average_time": 4.0774946212768555,
+    "correct_responses": 0
+  },
+  {
+    "model": "llama3.1:8b-instruct-fp16",
+    "times": [
+      10.546710968017578,
+      4.8696300983428955,
+      5.474356174468994
+    ],
+    "average_time": 6.963565746943156,
+    "correct_responses": 3
+  },
+  {
+    "model": "llama3.1:8b-instruct-q8_0",
+    "times": [
+      7.932523965835571,
+      4.0772011280059814,
+      4.2244250774383545
+    ],
+    "average_time": 5.411383390426636,
+    "correct_responses": 2
+  }
+]

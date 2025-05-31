@@ -1,0 +1,102 @@
+[
+  {
+    "model": "cogito:32b-v1-preview-qwen-q8_0",
+    "times": [
+      27.571215867996216,
+      10.242898941040039,
+      10.519542932510376
+    ],
+    "average_time": 16.11121924718221,
+    "correct_responses": 3
+  },
+  {
+    "model": "cogito:14b-v1-preview-qwen-q8_0",
+    "times": [
+      14.409769058227539,
+      6.681262254714966,
+      5.94324803352356
+    ],
+    "average_time": 9.011426448822021,
+    "correct_responses": 2
+  },
+  {
+    "model": "llama3.3:latest",
+    "times": [
+      33.90670084953308,
+      13.93503999710083,
+      15.09949517250061
+    ],
+    "average_time": 20.980412006378174,
+    "correct_responses": 2
+  },
+  {
+    "model": "llama3.3:70b-instruct-q5_K_M",
+    "times": [
+      43.30389094352722,
+      16.713995218276978,
+      17.4524188041687
+    ],
+    "average_time": 25.823434988657635,
+    "correct_responses": 1
+  },
+  {
+    "model": "aya-expanse:8b-q8_0",
+    "times": [
+      10.623581886291504,
+      4.836481094360352,
+      4.558593988418579
+    ],
+    "average_time": 6.6728856563568115,
+    "correct_responses": 2
+  },
+  {
+    "model": "nemotron:70b-instruct-q5_K_M",
+    "times": [
+      53.9146249294281,
+      17.69817876815796,
+      27.02735209465027
+    ],
+    "average_time": 32.880051930745445,
+    "correct_responses": 3
+  },
+  {
+    "model": "llama3.2:3b-instruct-q8_0",
+    "times": [
+      6.163558006286621,
+      5.405077934265137,
+      3.5542337894439697
+    ],
+    "average_time": 5.040956576665242,
+    "correct_responses": 2
+  },
+  {
+    "model": "mistral-large:123b-instruct-2407-q5_K_M",
+    "times": [
+      80.14337992668152,
+      46.82618474960327,
+      46.6019389629364
+    ],
+    "average_time": 57.857167879740395,
+    "correct_responses": 0
+  },
+  {
+    "model": "llama3.1:8b-instruct-fp16",
+    "times": [
+      12.520030975341797,
+      4.9515299797058105,
+      5.004863977432251
+    ],
+    "average_time": 7.492141644159953,
+    "correct_responses": 3
+  },
+  {
+    "model": "llama3.1:8b-instruct-q8_0",
+    "times": [
+      7.8830249309539795,
+      4.05132794380188,
+      4.297695875167847
+    ],
+    "average_time": 5.410682916641235,
+    "correct_responses": 3
+  }
+]
