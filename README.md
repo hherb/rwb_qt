@@ -1,86 +1,266 @@
-# Researcher's Worbench - now with QT based UI with real time Voice Assistant
-** work in progress, functionality only partially implemented yet; a lot of functionality still needs to be ported from my old web UI based RWB project
+# Researcher's Workbench (RWB)
 
-A biomedical sciences focussed agentic research interface resembling a chatbot, but
-- all inference including text-to-speech & speech-to-text generation happening locally
-- agents have long term memory and are able of searching the web, services such as pubmed, and local databases
-- agents can compose a reasobnable draft of a scientific publication with human-in-the-loop research and composition process
-A voice assistant application that uses speech-to-text, text-to-speech, and natural language processing to enable voice-based interactions.
+A Qt-based voice assistant for biomedical research with real-time speech interaction and agentic AI capabilities.
+
+## Overview
+
+RWB is a desktop application that combines:
+
+- **Real-time voice interaction** - Speech-to-text and text-to-speech, all running locally
+- **Agentic AI capabilities** - LLM-powered research assistant with tool access
+- **Research tools** - PubMed, DuckDuckGo, Wikipedia, and web scraping
+- **Modern Qt interface** - Tabbed UI with chat and history views
+- **Persistent storage** - Chat history and user preferences
 
 ## Features
 
-- Crafting and optimising database queries (eg pubmed) from natural language questions
-- keeping track of references and data sources long term, with retrieval by natural language questioning (variety of RAG techniques)
-- Real-time speech-to-text conversion
-- Natural language processing using Ollama
-- High-quality text-to-speech synthesis
-- Modern Qt-based user interface
-- Support for interrupting and stopping processing
+### Voice Interface
+- Real-time speech-to-text using Whisper (via fastrtc)
+- High-quality text-to-speech using Kokoro (via fastrtc)
+- Push-to-talk recording with visual feedback
+- Mute control for TTS output
+
+### Research Tools
+- **PubMed Search** - Natural language queries to NCBI's medical literature database
+- **Web Search** - DuckDuckGo integration for general queries
+- **Wikipedia** - Quick access to encyclopedic knowledge
+- **Website Scraping** - Extract content from web pages
+- **Python Execution** - Run Python code for calculations and data processing
+
+### Chat Interface
+- Streaming responses with real-time display
+- Markdown rendering with syntax highlighting
+- Clickable links opening in external browser
+- File attachment support (images, PDFs, documents)
+- Persistent chat history with browsing capability
+
+### Customization
+- Configurable user profile for personalized interactions
+- Assistant personality customization
+- Model selection from available Ollama models
+- Multiple TTS voice options
 
 ## Requirements
 
-- a reasonably powerful computer with sufficient and fast enough memory (a mac >= M1 processor with at least 24GB or a NVIDIA GPU with at least 16GB RAM will do)
+### Hardware
+- **Minimum**: 8GB RAM, modern multi-core CPU
+- **Recommended**:
+  - macOS with Apple Silicon (M1+) and 24GB RAM, OR
+  - Linux/Windows with NVIDIA GPU (16GB+ VRAM)
+- SSD recommended for faster model loading
+
+### Software
 - Python 3.12 or later
-- PortAudio (for PyAudio)
-- Ollama server running locally
-- FastRTC library
-- Agno library
-- PostgresSQL server with pgvector extension
+- PortAudio library (for audio recording)
+- Ollama server (for LLM inference)
 
 ## Installation
 
-1. Install PortAudio:
-   ```bash
-   # macOS
-   brew install portaudio
+### 1. Install System Dependencies
 
-   # Ubuntu/Debian
-   sudo apt-get install portaudio19-dev
-   ```
+**macOS:**
+```bash
+brew install portaudio
+```
 
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Linux/macOS
-   # or
-   .venv\Scripts\activate  # Windows
-   ```
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install portaudio19-dev python3-dev
+```
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+**Fedora:**
+```bash
+sudo dnf install portaudio-devel python3-devel
+```
 
-4. Start Ollama server:
-   ```bash
-   ollama serve
-   ```
+### 2. Set Up Python Environment
 
-5. Pull the required model:
-   ```bash
-   ollama pull granite3.2:8b-instruct-q8_0
-   ```
+```bash
+# Clone the repository
+git clone <repository-url>
+cd rwb_qt
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# or
+.venv\Scripts\activate     # Windows
+
+# Install dependencies
+pip install -e .
+# or
+pip install -r requirements.txt
+```
+
+### 3. Install and Configure Ollama
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Start the server
+ollama serve
+
+# Pull a recommended model (in a new terminal)
+ollama pull qwen2.5:14b-instruct-q8_0
+```
+
+For lower-end hardware, use a smaller model:
+```bash
+ollama pull qwen2.5:7b-instruct-q4_0
+```
 
 ## Usage
 
-1. Start the application:
-   ```bash
-   python -m rwb
-   ```
+### Starting the Application
 
-2. Hold the "Talk" button while speaking
-3. Release the button to process your speech
-4. Listen to the assistant's response
-5. Use the "Stop" button to interrupt processing if needed
+```bash
+python -m rwb
+```
+
+### Basic Interaction
+
+1. **Voice Input**: Hold the "Talk" button while speaking, release to process
+2. **Text Input**: Type in the text field and press Ctrl+Enter to send
+3. **Stop Processing**: Click "Stop" to interrupt ongoing processing
+4. **Mute TTS**: Check "Mute" to disable voice output
+
+### Settings
+
+Click the settings icon (gear) to configure:
+- **User Profile**: Your name, title, and background for personalized responses
+- **Assistant**: Customize the assistant's name and personality
+- **Model**: Select from available Ollama models and TTS voices
+
+### Chat History
+
+Switch to the "History" tab to:
+- Browse previous conversations
+- View conversation details
+- Delete old histories
+
+## Project Structure
+
+```
+rwb_qt/
+├── main.py                 # Entry point
+├── rwb/                    # Main package
+│   ├── __main__.py        # Module entry point
+│   ├── context.py         # Settings management
+│   ├── agents/            # LLM agent implementation
+│   │   ├── rwbagent.py   # Main agent class
+│   │   └── worker.py     # Background workers
+│   ├── audio/             # Audio processing & UI
+│   │   ├── assistant.py  # Main GUI window
+│   │   ├── processor.py  # STT/TTS processing
+│   │   ├── recorder.py   # Audio recording
+│   │   └── ui/           # UI components
+│   ├── helpers/           # Utility functions
+│   ├── llm/               # LLM utilities
+│   ├── qt/                # Qt platform utilities
+│   └── tools/             # Research tools
+├── experimental/           # Experimental features
+├── docs/                   # Documentation
+│   └── developers/        # Developer documentation
+├── pyproject.toml         # Project configuration
+└── requirements.txt       # Dependencies
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEFAULT_MODEL` | Default Ollama model | `qwen2.5:14b-instruct-q8_0` |
+| `AUTHOR_EMAIL` | Email for NCBI Entrez API | `default@example.com` |
+
+### Settings Storage
+
+Settings are stored using Qt's QSettings:
+- **macOS**: `~/Library/Preferences/com.rwb.app`
+- **Linux**: `~/.config/RWB/`
+- **Windows**: Windows Registry
+
+Chat history is stored in: `~/.rwb/chat_history/`
+
+## Dependencies
+
+Core dependencies:
+- **PySide6** (>=6.9.0) - Qt GUI framework
+- **fastrtc** (>=0.0.20) - STT/TTS models
+- **ollama** (>=0.4.7) - LLM client
+- **agno** (>=1.2.15) - Agent framework
+- **PyAudio** (>=0.2.14) - Audio I/O
+- **Biopython** (>=1.85) - PubMed access
+
+See `pyproject.toml` for complete dependency list.
 
 ## Development
 
-The project is organized into several modules:
+### Developer Documentation
 
-- `rwb/audio/assistant.py`: Main GUI application
-- `rwb/audio/processor.py`: Audio processing and model interaction
-- `rwb/qt/plugin_manager.py`: Qt plugin management for macOS compatibility
+Comprehensive documentation is available in `docs/developers/`:
+
+- **[Quickstart Guide](docs/developers/QUICKSTART.md)** - Get started with development
+- **[Architecture Guide](docs/developers/ARCHITECTURE.md)** - System design and data flow
+- **[API Reference](docs/developers/API_REFERENCE.md)** - Detailed module documentation
+
+### Running from Source
+
+```bash
+# Activate virtual environment
+source .venv/bin/activate
+
+# Run the application
+python -m rwb
+
+# Or run directly
+python main.py
+```
+
+### Building Packages
+
+**PyInstaller (Cross-platform):**
+```bash
+pyinstaller rwb.spec
+```
+
+**py2app (macOS):**
+```bash
+python setup.py py2app
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Qt plugin errors (macOS):**
+- The application automatically handles Qt plugin discovery
+- If issues persist, try reinstalling PySide6: `pip install --force-reinstall PySide6`
+
+**No audio input:**
+- Check microphone permissions in system settings
+- Verify PortAudio is installed correctly
+- Check the correct audio device is selected
+
+**Ollama connection failed:**
+- Ensure Ollama server is running: `ollama serve`
+- Verify the model is downloaded: `ollama list`
+- Check server is accessible: `curl http://localhost:11434/api/tags`
+
+**Slow response times:**
+- Try a smaller model (e.g., 7B instead of 14B parameters)
+- Ensure sufficient RAM is available
+- Check GPU utilization if using CUDA
 
 ## License
 
 MIT License
+
+## Acknowledgments
+
+- [Ollama](https://ollama.com/) for local LLM inference
+- [fastrtc](https://github.com/FastRTC/fastrtc) for STT/TTS models
+- [Agno](https://github.com/agno-dev/agno) for the agent framework
+- [PySide6](https://doc.qt.io/qtforpython-6/) for the Qt bindings
