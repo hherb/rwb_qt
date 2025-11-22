@@ -308,9 +308,9 @@ class RWBAgent(QObject):
         # Process the text input
         self.process_user_input(text)
 
-    def parse_citation(self, msg: Dict[str, str]|str) -> Dict[str, str]:
+    def parse_citation(self, msg: Dict[str, str]|str) -> Dict[str, str] | None:
         if not msg:
-            return []
+            return None
         if 'title' in msg and 'href' in msg:
             # Handle dictionary format with title and href
             return({
@@ -337,7 +337,8 @@ class RWBAgent(QObject):
                 'title': msg,
                 'href': msg
             })
-
+        # Unrecognized format
+        return None
 
     def get_citations(self, chunk: Any) -> List[Dict[str, str]]:
         """Extract citations from the chunk content.
