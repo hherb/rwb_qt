@@ -378,7 +378,7 @@ def test_performance(model="gemma3:4b"):
         print(f"Processing {prompt_key}...")
         for i in range(10): # Run 10 times per prompt as in original code
             print(f"  Iteration {i+1}/10")
-            query = pubmed_query_crafter(question, model="gemma3:4b", prompt=prompt_content)
+            query = pm.pubmed_query_crafter(question, model="gemma3:4b", prompt=prompt_content)
             print(f"    Generated Query: {query[:100]}...") # Print truncated query
             results_str = pm.search_pubmed(query, max_results=3)
 

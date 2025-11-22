@@ -4,25 +4,22 @@ This module provides the main GUI application for the voice assistant,
 handling user interaction, audio recording, and displaying the conversation.
 """
 
-import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter, QHBoxLayout, QPushButton
-from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject, QEvent, QSettings, QSize, QTimer, QPoint
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget, QSplitter, QHBoxLayout, QPushButton
+from PySide6.QtCore import Qt, Slot, QObject, QEvent, QSettings, QSize, QTimer, QPoint
 from PySide6.QtGui import QIcon
 from fastrtc import get_stt_model, get_tts_model, KokoroTTSOptions
-from typing import Optional, Any, Dict
+from typing import Any, Dict
 from time import sleep
 
 from rwb.agents.rwbagent import RWBAgent  # Updated import path
 from rwb.context import context_manager
 from rwb.helpers.texts import random_greeting, random_shutdown
 
-
 from .processor import AudioProcessor
 from .chat_message import ChatMessage, MessageSender
 from .chat_history import ChatHistory
 from .recorder import AudioRecorder
 from .ui.settings_dialog import SettingsDialog
-from rwb.context import context_manager
 from .ui.components import (
     create_status_label,
     create_talk_button,
@@ -31,7 +28,6 @@ from .ui.components import (
     create_text_input,
     create_send_button,
     create_chat_scroll_area,
-    create_button_layout
 )
 from .ui.styles import (
     STATUS_READY,
@@ -39,10 +35,6 @@ from .ui.styles import (
     STATUS_PROCESSING,
     STATUS_SPEAKING,
     STATUS_STOPPED,
-    BUTTON_TALK,
-    BUTTON_RECORDING,
-    BUTTON_PROCESSING,
-    BUTTON_STYLE_RECORDING,
     SETTINGS_BUTTON_STYLE,
     TAB_WIDGET_STYLE,
     SPLITTER_STYLE
@@ -499,7 +491,7 @@ class AudioAssistant(QMainWindow):
         
         # Reset UI state
         self.status_label.setText(STATUS_READY)
-        self.talk_button.setStyleSheet(BUTTON_STYLE_NORMAL)
+        # Note: BUTTON_STYLE_NORMAL was removed - using default styling
         self.talk_button.setEnabled(True)
         self.stop_button.setVisible(False)
     
