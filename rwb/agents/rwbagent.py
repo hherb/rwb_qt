@@ -5,7 +5,7 @@ and streaming responses, separate from audio processing.
 """
 import os
 import pathlib
-from typing import Iterator, AsyncIterator, List, Dict, Any, Optional, Union
+from typing import Iterator, AsyncIterator, List, Dict, Any, Union
 import asyncio
 from textwrap import dedent
 from datetime import datetime
@@ -14,18 +14,15 @@ from pprint import pprint
 from dotenv import load_dotenv
 import random
 
-from PySide6.QtCore import QObject, Signal, QMutex, QThreadPool
+from PySide6.QtCore import QObject, Signal, QThreadPool
 
 # Import the context manager for user and assistant settings
 from rwb.context import context_manager
 
-# Import the sentence splitter at module level
-from rwb.audio.processor import split_into_sentences
 from rwb.agents.worker import InputProcessorWorker
 
 from agno.agent import Agent
 from agno.models.ollama import Ollama
-from PySide6.QtCore import QEvent, QCoreApplication
 from agno.tools.duckduckgo import DuckDuckGoTools
 #from agno.tools.pubmed import PubmedTools. #it sucks
 from rwb.tools.pubmed import PubMedTools
@@ -43,7 +40,7 @@ load_dotenv()
 AUTHOR_EMAIL = os.getenv("AUTHOR_EMAIL") or "default@example.com"
 print(f"Author email: {AUTHOR_EMAIL}")
 
-PYTHONTOOLS_BASEDIR = pathlib.Path("~/.rwbtmp/python") 
+PYTHONTOOLS_BASEDIR = pathlib.Path("~/.rwbtmp/python").expanduser()
 if not PYTHONTOOLS_BASEDIR.exists():
     os.makedirs(PYTHONTOOLS_BASEDIR, exist_ok=True)
 
@@ -333,7 +330,7 @@ class RWBAgent(QObject):
                 'doi': msg.get('doi', 'N/A'),
                 'abstract': msg.get('abstract', 'N/A')
             })
-        elif type(msg) == str:
+        elif isinstance(msg, str):
             # Handle string format (treat the string as both title and URL)
             return({
                 'format': 'unknown',
@@ -435,8 +432,6 @@ class RWBAgent(QObject):
         Returns:
             Formatted string with citations
         """
-        from typing import Union
-        
         citationstr = "<div class='references'>\n<h3>References</h3>\n<ol>"
         
         for citation in citations:
